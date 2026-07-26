@@ -714,7 +714,7 @@ async function loadAllData(){
 
   var pObj={},nByBiz={};
   (movRes.data||[]).forEach(r=>{
-    var mov={id:r.id,tipo:r.tipo,cat:r.cat,desc:r.desc,monto:Number(r.monto),cur:r.cur,montoHNL:Number(r.monto_hnl),fecha:r.fecha};
+    var mov={id:r.id,tipo:r.tipo,cat:r.cat,desc:r.descripcion,monto:Number(r.monto),cur:r.cur,montoHNL:Number(r.monto_hnl),fecha:r.fecha};
     if(r.prendas){mov.prendas=r.prendas;mov.prendaTipo=r.prenda_tipo;}
     if(r.business_id==='personal'){(pObj[r.period]=pObj[r.period]||[]).push(mov);}
     else{nByBiz[r.business_id]=nByBiz[r.business_id]||{};(nByBiz[r.business_id][r.period]=nByBiz[r.business_id][r.period]||[]).push(mov);}
@@ -1249,7 +1249,7 @@ function agregar(app){
   var bizScope=app==='p'?'personal':currentBizId;
   if(app==='p'){var d=getPData();if(!d[k])d[k]=[];d[k].unshift(mov);MEM[uk('pData')]=d;}
   else{var d2=getNData(currentBizId);if(!d2[k])d2[k]=[];d2[k].unshift(mov);MEM[uk('nData_'+currentBizId)]=d2;}
-  sb.from('movements').insert({id:mov.id,user_id:CU,business_id:bizScope,period:k,tipo:mov.tipo,cat:mov.cat,desc:mov.desc,monto:mov.monto,cur:mov.cur,monto_hnl:mov.montoHNL,prendas:mov.prendas||null,prenda_tipo:mov.prendaTipo||null,fecha:mov.fecha}).then(function(r){if(r.error){console.error('insert movement',r.error);alert('No se pudo guardar en el servidor: '+r.error.message);}});
+  sb.from('movements').insert({id:mov.id,user_id:CU,business_id:bizScope,period:k,tipo:mov.tipo,cat:mov.cat,descripcion:mov.desc,monto:mov.monto,cur:mov.cur,monto_hnl:mov.montoHNL,prendas:mov.prendas||null,prenda_tipo:mov.prendaTipo||null,fecha:mov.fecha}).then(function(r){if(r.error){console.error('insert movement',r.error);alert('No se pudo guardar en el servidor: '+r.error.message);}});
   document.getElementById(app+'-monto').value='';document.getElementById(app+'-desc').value='';
   if(app==='n'){document.getElementById('n-prendas').value='';document.getElementById('n-prenda-tipo').value='';}
   refreshAll();
