@@ -194,6 +194,8 @@ select option{background:var(--surface2)}
 .biz-icon-big{width:38px;height:38px;border-radius:10px;background:rgba(123,97,255,.15);display:flex;align-items:center;justify-content:center;font-size:1.15rem;flex-shrink:0}
 .aho-box{background:linear-gradient(135deg,rgba(255,196,92,.07),rgba(255,196,92,.01));border:1px solid rgba(255,196,92,.2);border-radius:var(--r);padding:1rem}
 .mhist{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.5rem;display:flex;align-items:center;justify-content:space-between}
+.bizhome-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem}
+@media(max-width:700px){.bizhome-cards{grid-template-columns:1fr}}
 .section{display:none}.section.active{display:block}
 .app-panel{display:none}.app-panel.active{display:block}
 /* ── BOTTOM NAV ── */
@@ -204,16 +206,6 @@ select option{background:var(--surface2)}
 .bn-icon{font-size:1.15rem;line-height:1}
 .bn-lbl{font-size:9.5px;font-weight:600;letter-spacing:.01em}
 .has-bottom-nav{padding-bottom:78px}
-/* ── CONTEXT PICKER SHEET ── */
-.ctx-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:400;opacity:0;pointer-events:none;transition:.25s}
-.ctx-overlay.open{opacity:1;pointer-events:all}
-.ctx-sheet{position:fixed;left:0;right:0;bottom:-100%;z-index:450;background:var(--surface);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:1.1rem 1rem calc(1.1rem + env(safe-area-inset-bottom));transition:.3s cubic-bezier(.4,0,.2,1);max-width:500px;margin:0 auto}
-.ctx-sheet.open{bottom:0}
-.ctx-sheet-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem;text-align:center}
-.ctx-opt{display:flex;align-items:center;gap:10px;padding:.8rem .75rem;border-radius:12px;cursor:pointer;transition:.15s;font-size:14px;font-weight:600;margin-bottom:4px}
-.ctx-opt:hover{background:var(--surface2)}
-.ctx-opt.muted{color:var(--muted);font-weight:400;justify-content:center;cursor:default}
-.ctx-opt.muted:hover{background:none}
 @media(max-width:700px){.hero{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}.inv-stats{grid-template-columns:1fr 1fr}.home-cards{grid-template-columns:1fr}.main{padding:.85rem}.hv{font-size:1.1rem}}
 </style>
 </head>
@@ -311,6 +303,7 @@ select option{background:var(--surface2)}
   <!-- Sub navs -->
   <div class="sub-nav" id="sn-p" style="display:none">
     <div class="snav ac" id="pn-res" onclick="showSec('p','res')">📊 Resumen</div>
+    <div class="snav" id="pn-cats" onclick="showSec('p','cats')">🏷️ Categorías</div>
     <div class="snav" id="pn-movs" onclick="showSec('p','movs')">📋 Movimientos</div>
     <div class="snav" id="pn-ahorro" onclick="showSec('p','ahorro')">💰 Ahorros</div>
     <div class="snav" id="pn-deudas" onclick="showSec('p','deudas')">💳 Deudas</div>
@@ -324,6 +317,7 @@ select option{background:var(--surface2)}
     </div>
     <div class="sub-nav" id="sn-n2">
       <div class="snav an" id="nn-res" onclick="showSec('n','res')">📊 Resumen</div>
+      <div class="snav" id="nn-cats" onclick="showSec('n','cats')">🏷️ Categorías</div>
       <div class="snav" id="nn-movs" onclick="showSec('n','movs')">📋 Movimientos</div>
       <div class="snav" id="nn-inv" onclick="showSec('n','inv')">👔 Inventario</div>
       <div class="snav" id="nn-est" onclick="showSec('n','est')">🧮 Estimado</div>
@@ -421,19 +415,33 @@ select option{background:var(--surface2)}
 
     <!-- NEGOCIO -->
     <div id="app-n" class="app-panel">
-      <div class="hero">
+      <div id="n-bizhome" class="section active">
+        <div class="bizhome-cards" id="n-bizhome-cards"></div>
+      </div>
+      <div class="hero" id="n-hero">
         <div class="hcard mn"><div class="hl">Ganancia del mes — <span id="nh-bizname" style="color:var(--accent2)">—</span></div><div class="hv a2" id="nh-bal">L 0.00</div><div class="hv-usd" id="nh-bal-usd">$ 0.00</div><div class="hsub" id="nh-bal-sub">Sin movimientos</div><div class="acum-box"><div class="acum-lbl">Acumulado con sobrante</div><div class="acum-val" style="color:var(--accent2)" id="nh-bal-acum">L 0.00</div><div class="acum-usd" id="nh-bal-acum-usd">$ 0.00</div><div class="rollover-info" id="nh-carry" style="color:var(--accent2)"></div></div></div>
         <div class="hcard"><div class="hl">Ventas</div><div class="hv pos" id="nh-ing">L 0.00</div><div class="hv-usd" id="nh-ing-usd">$ 0.00</div><div class="hsub" id="nh-ing-s">0 ventas</div></div>
         <div class="hcard"><div class="hl">Costos</div><div class="hv neg" id="nh-gas">L 0.00</div><div class="hv-usd" id="nh-gas-usd">$ 0.00</div><div class="hsub" id="nh-gas-s">0 costos</div></div>
         <div class="hcard"><div class="hl">Margen %</div><div class="hv a2" id="nh-mg">0%</div><div class="hv-usd" style="font-size:.8rem;color:var(--muted)" id="nh-stock-lbl">stock: 0</div><div class="hsub">sobre ventas</div></div>
       </div>
-      <div id="n-res" class="section active">
+      <div id="n-res" class="section">
+        <div class="card" id="n-inv-card">
+          <div class="ctitle">📦 Registro de inventario <span style="font-weight:400;color:var(--muted);font-size:11px;text-transform:none">(opcional — para negocios de productos)</span></div>
+          <div class="cur-tog" style="margin-bottom:.75rem">
+            <div class="cb ac an" id="inv-sin" onclick="setInvMode('sin')">🚫 Sin inventario</div>
+            <div class="cb" id="inv-con" onclick="setInvMode('con')">📦 Con inventario</div>
+          </div>
+          <div id="inv-fields" style="display:none">
+            <div class="frow"><div class="fg"><label id="prendas-lbl-cant">Cantidad</label><input class="in2" type="number" id="n-prendas" placeholder="0" min="0" step="1"></div><div class="fg"><label>Tipo de producto</label><input class="in2" list="n-prenda-tipo-list" id="n-prenda-tipo" placeholder="Ej: Camiseta, Combo, Corte de pelo..."><datalist id="n-prenda-tipo-list"></datalist></div></div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.5">Escribí el tipo de producto — se guarda como sugerido para tus próximos registros de este negocio.</div>
+          </div>
+          <div id="inv-fields-off" style="font-size:12px;color:var(--muted)">Este negocio vende servicios o no necesita control de inventario. Activá "Con inventario" si querés llevar cantidades y tipos de producto.</div>
+        </div>
         <div class="g2">
           <div class="card"><div class="ctitle" style="color:var(--accent2)">Registrar — <span id="n-reg-bizname">Negocio</span></div>
             <div class="frow"><div class="fg"><label>Tipo</label><select id="n-tipo" onchange="updCats('n')"><option value="venta">📈 Venta / Ingreso</option><option value="costo">📉 Costo / Gasto</option></select></div><div class="fg"><label>Categoría</label><select id="n-cat"></select></div></div>
             <div class="fg"><label>Descripción</label><input class="in2" type="text" id="n-desc" placeholder="¿Qué vendiste/compraste?"></div>
             <div class="frow"><div class="fg"><label>Monto</label><input class="in2" type="number" id="n-monto" placeholder="0.00" min="0" step="0.01"></div><div class="fg"><label>Moneda</label><div class="cur-tog"><div class="cb ac" id="n-hnl" onclick="setCur('n','HNL')">L HNL</div><div class="cb" id="n-usd" onclick="setCur('n','USD')">$ USD</div></div></div></div>
-            <div class="frow"><div class="fg"><label id="prendas-lbl-cant">Cantidad</label><input class="in2" type="number" id="n-prendas" placeholder="0" min="0" step="1"></div><div class="fg"><label>Tipo</label><select class="in2" id="n-prenda-tipo"><option>Camiseta</option><option>Pantalón</option><option>Vestido</option><option>Blusa</option><option>Falda</option><option>Chaqueta</option><option>Bermuda</option><option>Calzado</option><option>Accesorio</option><option>Otro</option></select></div></div>
             <button class="btn-n" onclick="agregar('n')">+ Registrar</button>
           </div>
           <div class="card"><div class="ctitle">Últimos del mes</div><div id="n-lista-rec"><div class="empty">Sin movimientos 🌱</div></div></div>
@@ -492,6 +500,16 @@ select option{background:var(--surface2)}
         </div>
       </div>
     </div><!-- /app-n -->
+
+    <!-- GRÁFICAS COMBINADAS (personal + todos los negocios) -->
+    <div id="app-grafview" class="app-panel">
+      <div id="grafview-content"></div>
+    </div>
+
+    <!-- HISTORIAL COMBINADO (personal + todos los negocios, resumido) -->
+    <div id="app-histview" class="app-panel">
+      <div id="histview-content"></div>
+    </div>
   </main>
 </div><!-- /screen-app -->
 
@@ -507,17 +525,15 @@ select option{background:var(--surface2)}
     <div class="sb-section-lbl">Navegación</div>
     <div class="sb-item" onclick="sbGo('home')"><div class="sb-icon">🏠</div>Inicio</div>
     <div class="sb-item" onclick="sbGo('personal')"><div class="sb-icon">👤</div>Finanzas Personales</div>
-    <div class="sb-section-lbl" id="sb-biz-lbl" style="display:none">Mis Negocios</div>
+    <div class="sb-item" onclick="sbGo('negocio-home')"><div class="sb-icon">🏪</div>Mis Negocios</div>
+    <div class="sb-section-lbl" id="sb-biz-lbl" style="display:none">Acceso rápido</div>
     <div id="sb-biz-items"></div>
-    <div class="sb-item" onclick="sbGo('new-biz')"><div class="sb-icon">➕</div>Agregar negocio</div>
   </div>
   <div class="sb-section">
     <div class="sb-section-lbl">Herramientas</div>
-    <div class="sb-item" onclick="sbGo('graf-p')"><div class="sb-icon">📈</div>Gráficas personales</div>
-    <div class="sb-item" onclick="sbGo('hist-p')"><div class="sb-icon">🗂</div>Historial personal</div>
+    <div class="sb-item" onclick="sbGo('graf')"><div class="sb-icon">📊</div>Gráficas</div>
+    <div class="sb-item" onclick="sbGo('hist')"><div class="sb-icon">🗂</div>Historial</div>
     <div class="sb-item" onclick="sbGo('cats-p')"><div class="sb-icon">🏷️</div>Categorías personales</div>
-    <div class="sb-item" id="sb-graf-n" onclick="sbGo('graf-n')" style="display:none"><div class="sb-icon">📊</div>Gráficas negocio</div>
-    <div class="sb-item" id="sb-hist-n" onclick="sbGo('hist-n')" style="display:none"><div class="sb-icon">🗂</div>Historial negocio</div>
     <div class="sb-item" id="sb-cats-n" onclick="sbGo('cats-n')" style="display:none"><div class="sb-icon">🏷️</div>Categorías negocio</div>
   </div>
   <div class="sb-section">
@@ -534,13 +550,6 @@ select option{background:var(--surface2)}
   <div class="bn-item" id="bn-negocio" onclick="navBottom('negocio')"><div class="bn-icon">🏪</div><div class="bn-lbl">Negocio</div></div>
   <div class="bn-item" id="bn-graf" onclick="navBottom('graf')"><div class="bn-icon">📊</div><div class="bn-lbl">Gráficas</div></div>
   <div class="bn-item" id="bn-hist" onclick="navBottom('hist')"><div class="bn-icon">🗂</div><div class="bn-lbl">Historial</div></div>
-</div>
-
-<!-- ═══ CONTEXT PICKER (elegir Personal / Negocio para Gráficas e Historial) ═══ -->
-<div class="ctx-overlay" id="ctx-overlay" onclick="closeCtxPicker()"></div>
-<div class="ctx-sheet" id="ctx-sheet">
-  <div class="ctx-sheet-title" id="ctx-sheet-title">Elegí qué ver</div>
-  <div id="ctx-options"></div>
 </div>
 
 <script>
@@ -643,48 +652,10 @@ function setBnActive(tab){
 function navBottom(dest){
   if(dest==='home'){goHome();return;}
   if(dest==='personal'){showScreen('app');currentApp='p';showAppPanel('p');showSec('p','res');setBnActive('personal');return;}
-  if(dest==='negocio'){
-    var bizs=getBusinesses();
-    if(!bizs.length){showScreen('app');currentApp='n';showAppPanel('n');newBiz();showSec('n','config');setBnActive('negocio');return;}
-    if(bizs.length===1||bizs.find(b=>b.id===currentBizId)){
-      var id=bizs.find(b=>b.id===currentBizId)?currentBizId:bizs[0].id;
-      showScreen('app');currentApp='n';showAppPanel('n');selectBiz(id);showSec('n','res');setBnActive('negocio');return;
-    }
-    openBizPicker();return;
-  }
-  if(dest==='graf'||dest==='hist'){openContextPicker(dest);return;}
+  if(dest==='negocio'){showScreen('app');currentApp='n';showAppPanel('n');showSec('n','bizhome');setBnActive('negocio');return;}
+  if(dest==='graf'){openGrafCombined();return;}
+  if(dest==='hist'){openHistCombined();return;}
 }
-// Sheet: elegir Personal / Negocio para Gráficas e Historial
-var ctxDest=null;
-function openContextPicker(dest){
-  ctxDest=dest;
-  document.getElementById('ctx-sheet-title').textContent=dest==='graf'?'Ver gráficas de:':'Ver historial de:';
-  var bizs=getBusinesses();
-  var html='<div class="ctx-opt" onclick="pickCtx(\'p\',null)"><span>👤</span>Personal</div>';
-  bizs.forEach(b=>{html+=`<div class="ctx-opt" onclick="pickCtx('n','${b.id}')"><span>${b.emoji||'🏪'}</span>${b.name}</div>`;});
-  if(!bizs.length)html+='<div class="ctx-opt muted">Aún no tenés negocios creados</div>';
-  document.getElementById('ctx-options').innerHTML=html;
-  document.getElementById('ctx-overlay').classList.add('open');
-  document.getElementById('ctx-sheet').classList.add('open');
-}
-function closeCtxPicker(){document.getElementById('ctx-overlay').classList.remove('open');document.getElementById('ctx-sheet').classList.remove('open');}
-function pickCtx(app,bizId){
-  var dest=ctxDest;closeCtxPicker();
-  showScreen('app');currentApp=app;
-  if(app==='n')selectBiz(bizId);else showAppPanel('p');
-  showSec(app,dest);
-  setBnActive(dest);
-}
-// Sheet: elegir negocio cuando hay varios y ninguno activo
-function openBizPicker(){
-  ctxDest='negocio-select';
-  document.getElementById('ctx-sheet-title').textContent='Elegí tu negocio';
-  var bizs=getBusinesses();
-  document.getElementById('ctx-options').innerHTML=bizs.map(b=>`<div class="ctx-opt" onclick="pickBiz('${b.id}')"><span>${b.emoji||'🏪'}</span>${b.name}</div>`).join('');
-  document.getElementById('ctx-overlay').classList.add('open');
-  document.getElementById('ctx-sheet').classList.add('open');
-}
-function pickBiz(id){closeCtxPicker();showScreen('app');currentApp='n';showAppPanel('n');selectBiz(id);showSec('n','res');setBnActive('negocio');}
 
 // ══════════════════════════════════
 // SIDEBAR
@@ -695,10 +666,7 @@ function openSidebar(){
   var bizs=getBusinesses();
   document.getElementById('sb-biz-lbl').style.display=bizs.length?'block':'none';
   document.getElementById('sb-biz-items').innerHTML=bizs.map(b=>`<div class="sb-item" onclick="sbGoBiz('${b.id}')"><div class="sb-icon">${b.emoji||'🏪'}</div>${b.name}</div>`).join('');
-  var hasN=bizs.length>0;
-  document.getElementById('sb-graf-n').style.display=hasN?'flex':'none';
-  document.getElementById('sb-hist-n').style.display=hasN?'flex':'none';
-  document.getElementById('sb-cats-n').style.display=hasN?'flex':'none';
+  document.getElementById('sb-cats-n').style.display=bizs.length?'flex':'none';
   sb.classList.add('open');ov.classList.add('open');
 }
 function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sb-overlay').classList.remove('open');}
@@ -706,13 +674,12 @@ function sbGo(dest){
   closeSidebar();
   if(dest==='home'){goHome();return;}
   if(dest==='personal'){showScreen('app');currentApp='p';showAppPanel('p');showSec('p','res');setBnActive('personal');return;}
+  if(dest==='negocio-home'){showScreen('app');currentApp='n';showAppPanel('n');showSec('n','bizhome');setBnActive('negocio');return;}
   if(dest==='new-biz'){showScreen('app');currentApp='n';showAppPanel('n');showSec('n','config');newBiz();setBnActive('negocio');return;}
-  if(dest==='graf-p'){showScreen('app');currentApp='p';showAppPanel('p');showSec('p','graf');setBnActive('graf');return;}
-  if(dest==='hist-p'){showScreen('app');currentApp='p';showAppPanel('p');showSec('p','hist');setBnActive('hist');return;}
+  if(dest==='graf'){openGrafCombined();return;}
+  if(dest==='hist'){openHistCombined();return;}
   if(dest==='cats-p'){showScreen('app');currentApp='p';showAppPanel('p');showSec('p','cats');setBnActive('personal');return;}
-  if(dest==='graf-n'){showScreen('app');currentApp='n';showAppPanel('n');showSec('n','graf');setBnActive('graf');return;}
-  if(dest==='hist-n'){showScreen('app');currentApp='n';showAppPanel('n');showSec('n','hist');setBnActive('hist');return;}
-  if(dest==='cats-n'){showScreen('app');currentApp='n';showAppPanel('n');showSec('n','cats');setBnActive('negocio');return;}
+  if(dest==='cats-n'){var bz=getBusinesses();if(!currentBizId&&bz.length)currentBizId=bz[0].id;showScreen('app');currentApp='n';showAppPanel('n');showSec('n','cats');setBnActive('negocio');return;}
   if(dest==='perfil'){showScreen('app');currentApp='p';showAppPanel('p');showSec('p','perfil');setBnActive('personal');return;}
 }
 function sbGoBiz(id){closeSidebar();showScreen('app');currentApp='n';currentBizId=id;showAppPanel('n');selectBiz(id);showSec('n','res');setBnActive('negocio');}
@@ -863,6 +830,30 @@ function setCur(app,c){
 function toHNL(m,c){return c==='USD'?m*RATE:m;}
 
 // ══════════════════════════════════
+// INVENTARIO — modo con/sin y tipos de producto por negocio
+// ══════════════════════════════════
+var nInvMode='sin';
+function setInvMode(m){
+  nInvMode=m;
+  var elSin=document.getElementById('inv-sin'),elCon=document.getElementById('inv-con');
+  if(elSin)elSin.className='cb'+(m==='sin'?' ac an':'');
+  if(elCon)elCon.className='cb'+(m==='con'?' ac an':'');
+  var fEl=document.getElementById('inv-fields'),fOff=document.getElementById('inv-fields-off');
+  if(fEl)fEl.style.display=m==='con'?'block':'none';
+  if(fOff)fOff.style.display=m==='con'?'none':'block';
+}
+function getPrendaTipos(bid){return bid?ls(uk('prendaTipos_'+bid),[]):[];}
+function savePrendaTipoIfNew(bid,tipo){
+  if(!bid||!tipo)return;
+  var list=getPrendaTipos(bid);
+  if(!list.includes(tipo)){list.push(tipo);ss(uk('prendaTipos_'+bid),list);}
+}
+function renderPrendaTiposList(){
+  var dl=document.getElementById('n-prenda-tipo-list');if(!dl)return;
+  dl.innerHTML=getPrendaTipos(currentBizId).map(t=>`<option value="${t}">`).join('');
+}
+
+// ══════════════════════════════════
 // CATS
 // ══════════════════════════════════
 var BASE_CATS={ingreso:['Salario','Pago extra','Remesa','Venta personal','Otro ingreso'],gasto:['Comida','Transporte','Servicios','Entretenimiento','Salud','Ropa','Educación','Deuda','Otro'],ahorro:['Ahorro mensual','Fondo emergencia','Ahorro meta','Inversión','Otro ahorro']};
@@ -937,6 +928,28 @@ function selectBiz(id){
   var biz=getBizById(id);
   if(biz){set('nh-bizname',biz.name);set('n-reg-bizname',biz.name);set('n-ia-bizname',biz.name);set('n-cats-bizname',biz.name);}
   renderEstimado();updateRolloverDisplay();
+  setInvMode('sin');renderPrendaTiposList();
+}
+function renderBizHome(){
+  var bizs=getBusinesses();
+  var html=bizs.map(b=>{
+    var nd=getNData(b.id)[curKey()]||[];
+    var bIng=nd.filter(m=>m.tipo==='venta').reduce((a,m)=>a+m.montoHNL,0);
+    var bGas=nd.filter(m=>m.tipo==='costo').reduce((a,m)=>a+m.montoHNL,0);
+    return `<div class="hc-card biz" onclick="selectBiz('${b.id}');showSec('n','res')">
+      <div class="hc-arrow">→</div>
+      <div class="hc-icon">${b.emoji||'🏪'}</div>
+      <div class="hc-title">${b.name}</div>
+      <div class="hc-sub">${getRubroLabel(b.rubro)}</div>
+      <div class="hc-bal biz">${fmtL(bIng-bGas)}</div>
+    </div>`;
+  }).join('');
+  html+=`<div class="hc-card new-biz" onclick="showSec('n','config');newBiz()" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:120px">
+    <div style="font-size:1.5rem;margin-bottom:.4rem">➕</div>
+    <div class="hc-title" style="color:var(--accent2)">Agregar negocio</div>
+    <div class="hc-sub">Creá un nuevo negocio</div>
+  </div>`;
+  document.getElementById('n-bizhome-cards').innerHTML=html;
 }
 function saveBiz(){
   var editId=document.getElementById('biz-edit-id').value;
@@ -967,8 +980,18 @@ function showAppPanel(app){
   currentApp=app;
   document.getElementById('app-p').classList.toggle('active',app==='p');
   document.getElementById('app-n').classList.toggle('active',app==='n');
+  document.getElementById('app-grafview').classList.remove('active');
+  document.getElementById('app-histview').classList.remove('active');
   document.getElementById('sn-p').style.display=app==='p'?'flex':'none';
   document.getElementById('sn-n-wrap').style.display=app==='n'?'block':'none';
+}
+function showSpecialPanel(which){
+  document.getElementById('app-p').classList.remove('active');
+  document.getElementById('app-n').classList.remove('active');
+  document.getElementById('app-grafview').classList.toggle('active',which==='graf');
+  document.getElementById('app-histview').classList.toggle('active',which==='hist');
+  document.getElementById('sn-p').style.display='none';
+  document.getElementById('sn-n-wrap').style.display='none';
 }
 function showSec(app,sec){
   showAppPanel(app);
@@ -977,6 +1000,13 @@ function showSec(app,sec){
   var snEl=document.getElementById(app==='p'?'sn-p':'sn-n2');
   if(snEl)snEl.querySelectorAll('.snav').forEach(n=>n.classList.remove('ac','an'));
   var a=document.getElementById((app==='p'?'pn':'nn')+'-'+sec);if(a)a.classList.add(app==='p'?'ac':'an');
+  if(app==='n'){
+    var isBizHome=(sec==='bizhome');
+    document.getElementById('n-hero').style.display=isBizHome?'none':'grid';
+    document.getElementById('sn-n').style.display=isBizHome?'none':'flex';
+    document.getElementById('sn-n2').style.display=isBizHome?'none':'flex';
+  }
+  if(sec==='bizhome')renderBizHome();
   if(sec==='movs')renderTodos(app);
   if(sec==='graf')renderCharts(app);
   if(sec==='hist')renderHist(app);
@@ -1001,12 +1031,16 @@ function agregar(app){
   if(monto<=0){alert('Ingresá un monto válido');return;}
   var cur=app==='p'?pCur:nCur,montoHNL=toHNL(monto,cur);
   var mov={id:Date.now(),tipo,cat,desc,monto,cur,montoHNL,fecha:new Date().toLocaleDateString('es-HN')};
-  if(app==='n'){mov.prendas=parseInt(document.getElementById('n-prendas').value)||0;mov.prendaTipo=document.getElementById('n-prenda-tipo').value;}
+  if(app==='n'&&nInvMode==='con'){
+    var pr=parseInt(document.getElementById('n-prendas').value)||0;
+    var pt=document.getElementById('n-prenda-tipo').value.trim();
+    if(pr>0&&pt){mov.prendas=pr;mov.prendaTipo=pt;savePrendaTipoIfNew(currentBizId,pt);renderPrendaTiposList();}
+  }
   var k=curKey();
   if(app==='p'){var d=getPData();if(!d[k])d[k]=[];d[k].unshift(mov);ss(uk('pData'),d);}
   else{var d2=getNData(currentBizId);if(!d2[k])d2[k]=[];d2[k].unshift(mov);ss(uk('nData_'+currentBizId),d2);}
   document.getElementById(app+'-monto').value='';document.getElementById(app+'-desc').value='';
-  if(app==='n')document.getElementById('n-prendas').value='';
+  if(app==='n'){document.getElementById('n-prendas').value='';document.getElementById('n-prenda-tipo').value='';}
   refreshAll();
 }
 function eliminar(app,id){
@@ -1171,6 +1205,59 @@ function renderCharts(app){
   if(app==='n'){var ca=[],va=[];months.forEach(m=>{var mv=getNData(currentBizId)[m.key]||[];ca.push(mv.filter(x=>x.tipo==='costo'&&x.prendas).reduce((a,x)=>a+(x.prendas||0),0));va.push(mv.filter(x=>x.tipo==='venta'&&x.prendas).reduce((a,x)=>a+(x.prendas||0),0));});var pId='n-chart-prendas';destroyChart(pId);var c4=document.getElementById(pId);if(c4)charts[pId]=new Chart(c4,{type:'bar',data:{labels,datasets:[{label:'Compradas',data:ca,backgroundColor:'rgba(123,97,255,.7)',borderRadius:4},{label:'Vendidas',data:va,backgroundColor:'rgba(200,242,97,.7)',borderRadius:4}]},options:{...CD,responsive:true,maintainAspectRatio:false}});}
 }
 function renderChartInv(labels,data){var id='n-chart-inv';destroyChart(id);var ctx=document.getElementById(id);if(!ctx||!labels.length)return;charts[id]=new Chart(ctx,{type:'doughnut',data:{labels,datasets:[{data,backgroundColor:['#c8f261','#7b61ff','#ff5c5c','#ffc45c','#61d2f2'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#888',font:{size:10},boxWidth:12}}}}});}
+
+// ══════════════════════════════════
+// GRÁFICAS COMBINADAS (personal + todos los negocios)
+// ══════════════════════════════════
+function openGrafCombined(){
+  showScreen('app');showSpecialPanel('graf');renderGrafCombined();setBnActive('graf');
+}
+function renderGrafCombined(){
+  var bizs=getBusinesses();
+  var html=`<div class="card"><div class="ctitle">👤 Personal — Ingresos vs Gastos (6 meses)</div><div class="chart-wrap"><canvas id="gc-p-bar"></canvas></div></div>
+  <div class="card"><div class="ctitle">👤 Personal — Gastos por categoría</div><div class="chart-wrap"><canvas id="gc-p-pie"></canvas></div></div>
+  <div class="card"><div class="ctitle">👤 Personal — Balance neto mensual</div><div class="chart-wrap"><canvas id="gc-p-line"></canvas></div></div>`;
+  if(bizs.length){
+    bizs.forEach(b=>{
+      html+=`<div class="card"><div class="ctitle" style="color:var(--accent2)">${b.emoji||'🏪'} ${b.name} — Ventas vs Costos (6 meses)</div><div class="chart-wrap"><canvas id="gc-n-${b.id}-bar"></canvas></div></div>
+      <div class="card"><div class="ctitle" style="color:var(--accent2)">${b.emoji||'🏪'} ${b.name} — Ganancia neta mensual</div><div class="chart-wrap"><canvas id="gc-n-${b.id}-line"></canvas></div></div>
+      <div class="card"><div class="ctitle" style="color:var(--accent2)">${b.emoji||'🏪'} ${b.name} — Unidades compradas vs vendidas</div><div class="chart-wrap"><canvas id="gc-n-${b.id}-prendas"></canvas></div></div>`;
+    });
+  }else{
+    html+=`<div class="card"><div class="ctitle">🏪 Negocios</div><div class="empty">Aún no tenés negocios creados</div></div>`;
+  }
+  document.getElementById('grafview-content').innerHTML=html;
+  setTimeout(renderComboCharts,50);
+}
+function renderComboCharts(){
+  var months=last6(),labels=months.map(m=>m.label);
+  var pIngs=[],pGas=[],pBals=[];
+  months.forEach(m=>{var mv=getPData()[m.key]||[];var i=mv.filter(x=>x.tipo==='ingreso').reduce((a,x)=>a+x.montoHNL,0);var g=mv.filter(x=>x.tipo==='gasto').reduce((a,x)=>a+x.montoHNL,0);pIngs.push(i);pGas.push(g);pBals.push(i-g);});
+  destroyChart('gc-p-bar');var c1=document.getElementById('gc-p-bar');
+  if(c1)charts['gc-p-bar']=new Chart(c1,{type:'bar',data:{labels,datasets:[{label:'Ingresos',data:pIngs,backgroundColor:'rgba(200,242,97,.7)',borderRadius:4},{label:'Gastos',data:pGas,backgroundColor:'rgba(255,92,92,.6)',borderRadius:4}]},options:{...CD,responsive:true,maintainAspectRatio:false}});
+  destroyChart('gc-p-line');var c2=document.getElementById('gc-p-line');
+  if(c2)charts['gc-p-line']=new Chart(c2,{type:'line',data:{labels,datasets:[{label:'Balance neto',data:pBals,borderColor:'#c8f261',backgroundColor:'rgba(200,242,97,.08)',fill:true,tension:.4,pointBackgroundColor:'#c8f261'}]},options:{...CD,responsive:true,maintainAspectRatio:false}});
+  var movsP=getPData()[curKey()]||[],catsP={};movsP.filter(m=>m.tipo==='gasto').forEach(m=>{catsP[m.cat]=(catsP[m.cat]||0)+m.montoHNL;});
+  destroyChart('gc-p-pie');var c3=document.getElementById('gc-p-pie');
+  if(c3&&Object.keys(catsP).length)charts['gc-p-pie']=new Chart(c3,{type:'doughnut',data:{labels:Object.keys(catsP),datasets:[{data:Object.values(catsP),backgroundColor:['#c8f261','#7b61ff','#ff5c5c','#ffc45c','#61d2f2','#f261b0','#61f2a0','#f2a061'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#888',font:{size:10},boxWidth:12}}}}});
+  getBusinesses().forEach(b=>{
+    var ings=[],gass=[],bals=[],ca=[],va=[];
+    months.forEach(m=>{
+      var mv=getNData(b.id)[m.key]||[];
+      var i=mv.filter(x=>x.tipo==='venta').reduce((a,x)=>a+x.montoHNL,0);
+      var g=mv.filter(x=>x.tipo==='costo').reduce((a,x)=>a+x.montoHNL,0);
+      ings.push(i);gass.push(g);bals.push(i-g);
+      ca.push(mv.filter(x=>x.tipo==='costo'&&x.prendas).reduce((a,x)=>a+(x.prendas||0),0));
+      va.push(mv.filter(x=>x.tipo==='venta'&&x.prendas).reduce((a,x)=>a+(x.prendas||0),0));
+    });
+    var barId='gc-n-'+b.id+'-bar';destroyChart(barId);var cb=document.getElementById(barId);
+    if(cb)charts[barId]=new Chart(cb,{type:'bar',data:{labels,datasets:[{label:'Ventas',data:ings,backgroundColor:'rgba(123,97,255,.7)',borderRadius:4},{label:'Costos',data:gass,backgroundColor:'rgba(255,92,92,.6)',borderRadius:4}]},options:{...CD,responsive:true,maintainAspectRatio:false}});
+    var lineId='gc-n-'+b.id+'-line';destroyChart(lineId);var cl=document.getElementById(lineId);
+    if(cl)charts[lineId]=new Chart(cl,{type:'line',data:{labels,datasets:[{label:'Ganancia neta',data:bals,borderColor:'#7b61ff',backgroundColor:'rgba(123,97,255,.08)',fill:true,tension:.4,pointBackgroundColor:'#7b61ff'}]},options:{...CD,responsive:true,maintainAspectRatio:false}});
+    var pId='gc-n-'+b.id+'-prendas';destroyChart(pId);var cpp=document.getElementById(pId);
+    if(cpp)charts[pId]=new Chart(cpp,{type:'bar',data:{labels,datasets:[{label:'Compradas',data:ca,backgroundColor:'rgba(123,97,255,.7)',borderRadius:4},{label:'Vendidas',data:va,backgroundColor:'rgba(200,242,97,.7)',borderRadius:4}]},options:{...CD,responsive:true,maintainAspectRatio:false}});
+  });
+}
 
 // ══════════════════════════════════
 // HISTORIAL
