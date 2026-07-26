@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MisDatosHN</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{--bg:#0f0f11;--surface:#19191e;--surface2:#222228;--border:rgba(255,255,255,0.07);--accent:#c8f261;--accent2:#7b61ff;--red:#ff5c5c;--green:#c8f261;--amber:#ffc45c;--text:#f0f0f0;--muted:#888;--r:14px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -15,6 +16,8 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 /* ── AUTH ── */
 #screen-auth{align-items:center;justify-content:center;padding:1.5rem;background:radial-gradient(ellipse at 30% 20%,rgba(200,242,97,.06) 0%,transparent 60%),radial-gradient(ellipse at 80% 80%,rgba(123,97,255,.06) 0%,transparent 60%)}
 #screen-auth.active{display:flex}
+#screen-reset.active{display:flex;align-items:center;justify-content:center;padding:1.5rem}
+#screen-loading.active{display:flex}
 .auth-wrap{width:100%;max-width:400px}
 .auth-brand{text-align:center;margin-bottom:2rem}
 .auth-logo{font-size:2rem;font-weight:900;letter-spacing:-1px}.auth-logo span{color:var(--accent)}
@@ -227,11 +230,10 @@ select option{background:var(--surface2)}
       <div id="auth-login">
         <div class="fg"><label>Correo electrónico</label><input type="email" id="login-email" placeholder="tucorreo@email.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
         <div class="fg"><label>Contraseña</label><input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
-        <div class="remember-row">
-          <input type="checkbox" id="remember-me">
-          <label for="remember-me">Recordarme en este dispositivo</label>
+        <div style="text-align:right;margin:-.3rem 0 .75rem">
+          <span style="font-size:11.5px;color:var(--accent2);cursor:pointer" onclick="goRecover()">¿Olvidaste tu contraseña?</span>
         </div>
-        <button class="btn-p" onclick="doLogin()">Entrar →</button>
+        <button class="btn-p" onclick="doLogin()" id="login-btn">Entrar →</button>
         <div class="auth-err" id="login-err"></div>
       </div>
       <!-- REGISTER -->
@@ -240,11 +242,42 @@ select option{background:var(--surface2)}
         <div class="fg"><label>Correo electrónico</label><input type="email" id="reg-email" placeholder="tucorreo@email.com"></div>
         <div class="fg"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres"></div>
         <div class="fg"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="Repetir contraseña"></div>
-        <button class="btn-p" onclick="doRegister()">Crear cuenta →</button>
+        <button class="btn-p" onclick="doRegister()" id="reg-btn">Crear cuenta →</button>
         <div class="auth-err" id="reg-err"></div>
       </div>
-      <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:.85rem">Los datos se guardan localmente en tu dispositivo</div>
+      <!-- RECOVER PASSWORD -->
+      <div id="auth-recover" style="display:none">
+        <div class="fg"><label>Correo electrónico</label><input type="email" id="recover-email" placeholder="tucorreo@email.com"></div>
+        <button class="btn-n" onclick="doRecover()">Enviar enlace de recuperación</button>
+        <div class="auth-err" id="recover-err"></div>
+        <div style="text-align:center;margin-top:.75rem"><span style="font-size:11.5px;color:var(--muted);cursor:pointer" onclick="backToLogin()">← Volver a iniciar sesión</span></div>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:.85rem">Tus datos se guardan de forma segura en Supabase</div>
     </div>
+  </div>
+</div>
+
+<!-- ═══ RESET PASSWORD (tras clic en enlace del correo) ═══ -->
+<div id="screen-reset" class="screen">
+  <div class="auth-wrap">
+    <div class="auth-brand">
+      <div class="auth-logo">mis<span>datos</span>hn</div>
+      <div class="auth-slogan">Elegí tu nueva contraseña</div>
+    </div>
+    <div class="auth-card">
+      <div class="fg"><label>Nueva contraseña</label><input type="password" id="reset-pass" placeholder="Mínimo 6 caracteres"></div>
+      <div class="fg"><label>Confirmar contraseña</label><input type="password" id="reset-pass2" placeholder="Repetir contraseña"></div>
+      <button class="btn-p" onclick="doSetNewPassword()">Guardar nueva contraseña →</button>
+      <div class="auth-err" id="reset-err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LOADING ═══ -->
+<div id="screen-loading" class="screen" style="align-items:center;justify-content:center">
+  <div style="text-align:center;width:100%">
+    <div class="auth-logo" style="margin-bottom:.5rem">mis<span>datos</span>hn</div>
+    <div style="color:var(--muted);font-size:13px">Cargando tus datos…</div>
   </div>
 </div>
 
@@ -565,8 +598,24 @@ var MONTHS_S=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov',
 
 function mkey(y,m){return y+'-'+String(m+1).padStart(2,'0');}
 function curKey(){return mkey(curYear,curMonth);}
-function ls(k,d){try{var v=localStorage.getItem(k);return v!==null?JSON.parse(v):d;}catch(e){return d;}}
-function ss(k,v){localStorage.setItem(k,JSON.stringify(v));}
+
+// ══════════════════════════════════
+// SUPABASE CLIENT
+// ══════════════════════════════════
+var SUPABASE_URL='https://fcpunepukrwpbjbmfuzv.supabase.co';
+var SUPABASE_KEY='sb_publishable_GvK287oBw7cqw3GT3H4K8g_w5eHkG0q';
+var sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+var CU_EMAIL=null,profileName='';
+
+// ══════════════════════════════════
+// CACHÉ EN MEMORIA (reemplaza localStorage/sessionStorage)
+// Toda la persistencia real ocurre en Supabase; MEM solo vive
+// mientras dura la pestaña abierta y se hidrata desde Supabase
+// al iniciar sesión (ver loadAllData()).
+// ══════════════════════════════════
+var MEM={};
+function ls(k,d){return Object.prototype.hasOwnProperty.call(MEM,k)?MEM[k]:d;}
+function ss(k,v){MEM[k]=v;schedulePersist(k,v);}
 function uk(k){return 'u_'+CU+'_'+k;}
 
 function getPData(){return ls(uk('pData'),{});}
@@ -581,50 +630,210 @@ function getBizById(id){return getBusinesses().find(b=>b.id===id);}
 function getCatCustom(app,bid){var k=app==='p'?uk('catP'):uk('catN_'+bid);return ls(k,{ingreso:[],gasto:[],ahorro:[],venta:[],costo:[]});}
 
 // ══════════════════════════════════
-// AUTH
+// SINCRONIZACIÓN CON SUPABASE
+// Cada vez que ss() guarda un arreglo/objeto "completo" (igual que
+// antes hacía con localStorage), lo replicamos en la tabla
+// correspondiente. Los movimientos (pData/nData) se manejan aparte
+// (insert/delete puntual) en agregar()/eliminar() para más eficiencia.
 // ══════════════════════════════════
-var USERS_KEY='hn_users';
-function getUsers(){return ls(USERS_KEY,{});}
-function saveUsers(u){ss(USERS_KEY,u);}
+var estSyncTimers={};
+function schedulePersist(fullKey,value){
+  if(!CU)return;
+  var m;
+  if(fullKey===uk('businesses'))return syncBusinesses(value);
+  if(fullKey===uk('deudas'))return syncDeudas(value);
+  if(fullKey===uk('metas'))return syncMetas(value);
+  if(fullKey===uk('pRollover'))return syncRollovers('personal',value);
+  if((m=fullKey.match(/_nRollover_(.+)$/)))return syncRollovers(m[1],value);
+  if(fullKey===uk('catP'))return syncCategorias('personal',value);
+  if((m=fullKey.match(/_catN_(.+)$/)))return syncCategorias(m[1],value);
+  if((m=fullKey.match(/_estGrupos_(.+)$/))){
+    var bid=m[1];clearTimeout(estSyncTimers[bid]);
+    estSyncTimers[bid]=setTimeout(function(){syncEstimados(bid,value);},600);
+    return;
+  }
+  // pData / nData_* → persistidos directamente en agregar()/eliminar()
+}
+async function syncBusinesses(list){
+  try{
+    await sb.from('businesses').delete().eq('user_id',CU);
+    if(list.length)await sb.from('businesses').insert(list.map(b=>({id:b.id,user_id:CU,name:b.name,rubro:b.rubro,emoji:b.emoji,nota:b.nota||null})));
+  }catch(e){console.error('syncBusinesses',e);}
+}
+async function syncDeudas(list){
+  try{
+    await sb.from('deudas').delete().eq('user_id',CU);
+    if(list.length)await sb.from('deudas').insert(list.map(d=>({id:d.id,user_id:CU,nom:d.nom,cuota:d.cuota,meses:d.meses||null,nota:d.nota||null})));
+  }catch(e){console.error('syncDeudas',e);}
+}
+async function syncMetas(list){
+  try{
+    await sb.from('metas').delete().eq('user_id',CU);
+    if(list.length)await sb.from('metas').insert(list.map(m=>({id:m.id,user_id:CU,nom:m.nom,obj:m.obj,act:m.act})));
+  }catch(e){console.error('syncMetas',e);}
+}
+async function syncCategorias(scope,catsObj){
+  try{
+    await sb.from('categorias').delete().eq('user_id',CU).eq('business_id',scope);
+    var rows=[];
+    Object.keys(catsObj||{}).forEach(function(tipo){(catsObj[tipo]||[]).forEach(function(nombre){rows.push({user_id:CU,business_id:scope,tipo,nombre});});});
+    if(rows.length)await sb.from('categorias').insert(rows);
+  }catch(e){console.error('syncCategorias',e);}
+}
+async function syncRollovers(scope,rollObj){
+  try{
+    await sb.from('rollovers').delete().eq('user_id',CU).eq('business_id',scope);
+    var rows=Object.keys(rollObj||{}).map(function(period){return{user_id:CU,business_id:scope,period,amount:rollObj[period]};});
+    if(rows.length)await sb.from('rollovers').insert(rows);
+  }catch(e){console.error('syncRollovers',e);}
+}
+async function syncEstimados(bizId,list){
+  try{
+    await sb.from('estimado_grupos').delete().eq('user_id',CU).eq('business_id',bizId);
+    if(list.length)await sb.from('estimado_grupos').insert(list.map(g=>({id:g.id,user_id:CU,business_id:bizId,nombre:g.nombre||'',tipo:g.tipo,cantidad:g.cantidad||0,precio:g.precio||0})));
+  }catch(e){console.error('syncEstimados',e);}
+}
+
+// ══════════════════════════════════
+// CARGA INICIAL DE DATOS DESDE SUPABASE
+// ══════════════════════════════════
+async function loadAllData(){
+  MEM={};
+  var [profRes,bizRes,movRes,rollRes,deudaRes,metaRes,catRes,estRes]=await Promise.all([
+    sb.from('profiles').select('name').eq('id',CU).maybeSingle(),
+    sb.from('businesses').select('*').eq('user_id',CU).order('created_at'),
+    sb.from('movements').select('*').eq('user_id',CU),
+    sb.from('rollovers').select('*').eq('user_id',CU),
+    sb.from('deudas').select('*').eq('user_id',CU).order('created_at'),
+    sb.from('metas').select('*').eq('user_id',CU).order('created_at'),
+    sb.from('categorias').select('*').eq('user_id',CU),
+    sb.from('estimado_grupos').select('*').eq('user_id',CU)
+  ]);
+  profileName=(profRes.data&&profRes.data.name)||'';
+  MEM[uk('businesses')]=(bizRes.data||[]).map(b=>({id:b.id,name:b.name,rubro:b.rubro,emoji:b.emoji,nota:b.nota}));
+
+  var pObj={},nByBiz={};
+  (movRes.data||[]).forEach(r=>{
+    var mov={id:r.id,tipo:r.tipo,cat:r.cat,desc:r.desc,monto:Number(r.monto),cur:r.cur,montoHNL:Number(r.monto_hnl),fecha:r.fecha};
+    if(r.prendas){mov.prendas=r.prendas;mov.prendaTipo=r.prenda_tipo;}
+    if(r.business_id==='personal'){(pObj[r.period]=pObj[r.period]||[]).push(mov);}
+    else{nByBiz[r.business_id]=nByBiz[r.business_id]||{};(nByBiz[r.business_id][r.period]=nByBiz[r.business_id][r.period]||[]).push(mov);}
+  });
+  Object.values(pObj).forEach(arr=>arr.sort((a,b)=>b.id-a.id));
+  Object.values(nByBiz).forEach(o=>Object.values(o).forEach(arr=>arr.sort((a,b)=>b.id-a.id)));
+  MEM[uk('pData')]=pObj;
+  Object.keys(nByBiz).forEach(bid=>{MEM[uk('nData_'+bid)]=nByBiz[bid];});
+
+  var pRoll={},nRollByBiz={};
+  (rollRes.data||[]).forEach(r=>{
+    if(r.business_id==='personal')pRoll[r.period]=Number(r.amount);
+    else{nRollByBiz[r.business_id]=nRollByBiz[r.business_id]||{};nRollByBiz[r.business_id][r.period]=Number(r.amount);}
+  });
+  MEM[uk('pRollover')]=pRoll;
+  Object.keys(nRollByBiz).forEach(bid=>{MEM[uk('nRollover_'+bid)]=nRollByBiz[bid];});
+
+  MEM[uk('deudas')]=(deudaRes.data||[]).map(d=>({id:d.id,nom:d.nom,cuota:Number(d.cuota),meses:d.meses,nota:d.nota}));
+  MEM[uk('metas')]=(metaRes.data||[]).map(m=>({id:m.id,nom:m.nom,obj:Number(m.obj),act:Number(m.act)}));
+
+  var catP={ingreso:[],gasto:[],ahorro:[],venta:[],costo:[]},catNByBiz={};
+  (catRes.data||[]).forEach(c=>{
+    if(c.business_id==='personal'){(catP[c.tipo]=catP[c.tipo]||[]).push(c.nombre);}
+    else{catNByBiz[c.business_id]=catNByBiz[c.business_id]||{ingreso:[],gasto:[],ahorro:[],venta:[],costo:[]};(catNByBiz[c.business_id][c.tipo]=catNByBiz[c.business_id][c.tipo]||[]).push(c.nombre);}
+  });
+  MEM[uk('catP')]=catP;
+  Object.keys(catNByBiz).forEach(bid=>{MEM[uk('catN_'+bid)]=catNByBiz[bid];});
+
+  var estByBiz={};
+  (estRes.data||[]).forEach(e=>{(estByBiz[e.business_id]=estByBiz[e.business_id]||[]).push({id:e.id,nombre:e.nombre,tipo:e.tipo,cantidad:Number(e.cantidad),precio:Number(e.precio)});});
+  Object.keys(estByBiz).forEach(bid=>{MEM[uk('estGrupos_'+bid)]=estByBiz[bid];});
+}
+
+// ══════════════════════════════════
+// AUTH (Supabase Auth)
+// ══════════════════════════════════
 function switchAuthTab(t){
   document.getElementById('at-login').className='auth-tab '+(t==='login'?'ac':'');
   document.getElementById('at-reg').className='auth-tab '+(t==='reg'?'ac':'');
   document.getElementById('auth-login').style.display=t==='login'?'block':'none';
   document.getElementById('auth-reg').style.display=t==='reg'?'block':'none';
+  document.getElementById('auth-recover').style.display='none';
 }
-function showAuthErr(id,msg){var e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
-function doRegister(){
+function goRecover(){
+  document.getElementById('auth-login').style.display='none';
+  document.getElementById('auth-reg').style.display='none';
+  document.getElementById('auth-recover').style.display='block';
+  document.getElementById('at-login').className='auth-tab';
+  document.getElementById('at-reg').className='auth-tab';
+}
+function backToLogin(){switchAuthTab('login');}
+function showAuthErr(id,msg){var e=document.getElementById(id);e.textContent=msg;e.style.display=msg?'block':'none';}
+function mapAuthError(error){
+  var msg=(error&&error.message)||'Ocurrió un error.';
+  if(/already registered|already exists/i.test(msg))return'Este correo ya está registrado.';
+  if(/Invalid login credentials/i.test(msg))return'Correo o contraseña incorrectos.';
+  if(/Password should be at least/i.test(msg))return'Mínimo 6 caracteres en contraseña.';
+  if(/rate limit/i.test(msg))return'Demasiados intentos. Esperá un momento.';
+  return msg;
+}
+async function doRegister(){
   var name=document.getElementById('reg-name').value.trim(),email=document.getElementById('reg-email').value.trim().toLowerCase();
   var pass=document.getElementById('reg-pass').value,pass2=document.getElementById('reg-pass2').value;
   if(!name||!email||!pass)return showAuthErr('reg-err','Completá todos los campos.');
   if(pass.length<6)return showAuthErr('reg-err','Mínimo 6 caracteres en contraseña.');
   if(pass!==pass2)return showAuthErr('reg-err','Las contraseñas no coinciden.');
-  var users=getUsers();
-  if(users[email])return showAuthErr('reg-err','Este correo ya está registrado.');
-  users[email]={name,email,pass:btoa(pass)};saveUsers(users);
-  loginUser(email,false);
+  var btn=document.getElementById('reg-btn');btn.disabled=true;btn.textContent='Creando cuenta...';
+  var {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{name}}});
+  btn.disabled=false;btn.textContent='Crear cuenta →';
+  if(error)return showAuthErr('reg-err',mapAuthError(error));
+  if(data.session){await afterLogin(data.session.user);}
+  else{showAuthErr('reg-err','');alert('✅ Cuenta creada. Revisá tu correo para confirmarla y luego iniciá sesión.');switchAuthTab('login');}
 }
-function doLogin(){
+async function doLogin(){
   var email=document.getElementById('login-email').value.trim().toLowerCase();
   var pass=document.getElementById('login-pass').value;
-  var rem=document.getElementById('remember-me').checked;
-  var users=getUsers();
-  if(!users[email])return showAuthErr('login-err','Correo no encontrado.');
-  if(users[email].pass!==btoa(pass))return showAuthErr('login-err','Contraseña incorrecta.');
-  if(rem)ss('hn_remember',email);else{try{localStorage.removeItem('hn_remember');}catch(e){}}
-  loginUser(email,false);
+  if(!email||!pass)return showAuthErr('login-err','Completá correo y contraseña.');
+  var btn=document.getElementById('login-btn');btn.disabled=true;btn.textContent='Entrando...';
+  var {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  btn.disabled=false;btn.textContent='Entrar →';
+  if(error)return showAuthErr('login-err',mapAuthError(error));
+  await afterLogin(data.user);
 }
-function loginUser(email){
-  CU=email;ss('hn_session',email);
+async function doRecover(){
+  var email=document.getElementById('recover-email').value.trim().toLowerCase();
+  if(!email)return showAuthErr('recover-err','Ingresá tu correo.');
+  var {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});
+  if(error)return showAuthErr('recover-err',mapAuthError(error));
+  showAuthErr('recover-err','');
+  alert('✅ Si el correo existe, te enviamos un enlace para restablecer tu contraseña.');
+}
+async function doSetNewPassword(){
+  var p1=document.getElementById('reset-pass').value,p2=document.getElementById('reset-pass2').value;
+  if(p1.length<6)return showAuthErr('reset-err','Mínimo 6 caracteres.');
+  if(p1!==p2)return showAuthErr('reset-err','Las contraseñas no coinciden.');
+  var {error}=await sb.auth.updateUser({password:p1});
+  if(error)return showAuthErr('reset-err',mapAuthError(error));
+  alert('✅ Contraseña actualizada. Iniciá sesión de nuevo.');
+  await sb.auth.signOut();
+  window.location.href=window.location.origin+window.location.pathname;
+}
+async function afterLogin(user){
+  CU=user.id;CU_EMAIL=user.email;
+  showScreen('loading');
+  try{await loadAllData();}
+  catch(e){console.error(e);alert('No se pudieron cargar tus datos. Verificá tu conexión e intentá de nuevo.');}
   showScreen('home');initApp();
 }
-function doLogout(){
-  try{localStorage.removeItem('hn_session');}catch(e){}
-  CU=null;location.reload();
+async function doLogout(){
+  try{await sb.auth.signOut();}catch(e){}
+  CU=null;CU_EMAIL=null;MEM={};
+  location.reload();
 }
-function checkSession(){
-  var s=ls('hn_session',null)||ls('hn_remember',null);
-  if(s&&getUsers()[s]){CU=s;showScreen('home');initApp();}
+async function checkSession(){
+  sb.auth.onAuthStateChange(function(event,session){
+    if(event==='PASSWORD_RECOVERY')showScreen('reset');
+  });
+  var {data:{session}}=await sb.auth.getSession();
+  if(session){await afterLogin(session.user);}
 }
 
 // ══════════════════════════════════
@@ -689,8 +898,7 @@ function sbGoBiz(id){closeSidebar();showScreen('app');currentApp='n';currentBizI
 // ══════════════════════════════════
 function renderHomePage(){
   var hr=new Date().getHours(),greet=hr<12?'Buenos días ☀️':hr<18?'Buenas tardes 🌤':'Buenas noches 🌙';
-  var users=getUsers(),u=users[CU];
-  document.getElementById('home-greeting').textContent=greet+(u?', '+u.name.split(' ')[0]:'');
+  document.getElementById('home-greeting').textContent=greet+(profileName?', '+profileName.split(' ')[0]:'');
   var bizs=getBusinesses();
   var pMovs=getPData()[curKey()]||[];
   var pIng=pMovs.filter(m=>m.tipo==='ingreso').reduce((a,m)=>a+m.montoHNL,0);
@@ -842,12 +1050,13 @@ function setInvMode(m){
   if(fEl)fEl.style.display=m==='con'?'block':'none';
   if(fOff)fOff.style.display=m==='con'?'none':'block';
 }
-function getPrendaTipos(bid){return bid?ls(uk('prendaTipos_'+bid),[]):[];}
-function savePrendaTipoIfNew(bid,tipo){
-  if(!bid||!tipo)return;
-  var list=getPrendaTipos(bid);
-  if(!list.includes(tipo)){list.push(tipo);ss(uk('prendaTipos_'+bid),list);}
+function getPrendaTipos(bid){
+  if(!bid)return[];
+  var data=getNData(bid),set=new Set();
+  Object.values(data).forEach(arr=>arr.forEach(m=>{if(m.prendaTipo)set.add(m.prendaTipo);}));
+  return Array.from(set);
 }
+function savePrendaTipoIfNew(){/* derivado automáticamente desde los movimientos, no requiere guardado aparte */}
 function renderPrendaTiposList(){
   var dl=document.getElementById('n-prenda-tipo-list');if(!dl)return;
   dl.innerHTML=getPrendaTipos(currentBizId).map(t=>`<option value="${t}">`).join('');
@@ -1037,16 +1246,19 @@ function agregar(app){
     if(pr>0&&pt){mov.prendas=pr;mov.prendaTipo=pt;savePrendaTipoIfNew(currentBizId,pt);renderPrendaTiposList();}
   }
   var k=curKey();
-  if(app==='p'){var d=getPData();if(!d[k])d[k]=[];d[k].unshift(mov);ss(uk('pData'),d);}
-  else{var d2=getNData(currentBizId);if(!d2[k])d2[k]=[];d2[k].unshift(mov);ss(uk('nData_'+currentBizId),d2);}
+  var bizScope=app==='p'?'personal':currentBizId;
+  if(app==='p'){var d=getPData();if(!d[k])d[k]=[];d[k].unshift(mov);MEM[uk('pData')]=d;}
+  else{var d2=getNData(currentBizId);if(!d2[k])d2[k]=[];d2[k].unshift(mov);MEM[uk('nData_'+currentBizId)]=d2;}
+  sb.from('movements').insert({id:mov.id,user_id:CU,business_id:bizScope,period:k,tipo:mov.tipo,cat:mov.cat,desc:mov.desc,monto:mov.monto,cur:mov.cur,monto_hnl:mov.montoHNL,prendas:mov.prendas||null,prenda_tipo:mov.prendaTipo||null,fecha:mov.fecha}).then(function(r){if(r.error){console.error('insert movement',r.error);alert('No se pudo guardar en el servidor: '+r.error.message);}});
   document.getElementById(app+'-monto').value='';document.getElementById(app+'-desc').value='';
   if(app==='n'){document.getElementById('n-prendas').value='';document.getElementById('n-prenda-tipo').value='';}
   refreshAll();
 }
 function eliminar(app,id){
   var k=curKey();
-  if(app==='p'){var d=getPData();d[k]=(d[k]||[]).filter(m=>m.id!==id);ss(uk('pData'),d);}
-  else{var d2=getNData(currentBizId);d2[k]=(d2[k]||[]).filter(m=>m.id!==id);ss(uk('nData_'+currentBizId),d2);}
+  if(app==='p'){var d=getPData();d[k]=(d[k]||[]).filter(m=>m.id!==id);MEM[uk('pData')]=d;}
+  else{var d2=getNData(currentBizId);d2[k]=(d2[k]||[]).filter(m=>m.id!==id);MEM[uk('nData_'+currentBizId)]=d2;}
+  sb.from('movements').delete().eq('id',id).eq('user_id',CU).then(function(r){if(r.error){console.error('delete movement',r.error);alert('No se pudo eliminar en el servidor: '+r.error.message);}});
   renderTodos(app);refreshAll();
 }
 
@@ -1272,9 +1484,27 @@ function renderHist(app){
 // ══════════════════════════════════
 // PERFIL
 // ══════════════════════════════════
-function renderPerfil(){var u=getUsers()[CU];if(!u)return;set('perfil-avatar',(u.name||'?').charAt(0).toUpperCase());set('perfil-nombre-show',u.name);set('perfil-email-show',u.email);document.getElementById('perfil-nom-edit').value=u.name||'';}
-function saveProfile(){var nom=document.getElementById('perfil-nom-edit').value.trim();if(!nom){alert('Poné tu nombre');return;}var users=getUsers();users[CU].name=nom;saveUsers(users);set('sb-name',nom);set('sb-avatar',nom.charAt(0).toUpperCase());renderPerfil();alert('✅ Perfil actualizado');}
-function changePw(){var act=document.getElementById('pw-actual').value,nva=document.getElementById('pw-nueva').value,conf=document.getElementById('pw-conf').value;var el=document.getElementById('pw-msg');var u=getUsers()[CU];if(u.pass!==btoa(act)){el.style.color='var(--red)';el.textContent='Contraseña actual incorrecta.';return;}if(nva.length<6){el.style.color='var(--red)';el.textContent='Mínimo 6 caracteres.';return;}if(nva!==conf){el.style.color='var(--red)';el.textContent='Las contraseñas no coinciden.';return;}u.pass=btoa(nva);var users=getUsers();users[CU]=u;saveUsers(users);el.style.color='var(--green)';el.textContent='✅ Actualizada';document.getElementById('pw-actual').value='';document.getElementById('pw-nueva').value='';document.getElementById('pw-conf').value='';}
+function renderPerfil(){set('perfil-avatar',(profileName||'?').charAt(0).toUpperCase());set('perfil-nombre-show',profileName||'—');set('perfil-email-show',CU_EMAIL||'—');var el=document.getElementById('perfil-nom-edit');if(el)el.value=profileName||'';}
+async function saveProfile(){
+  var nom=document.getElementById('perfil-nom-edit').value.trim();
+  if(!nom){alert('Poné tu nombre');return;}
+  profileName=nom;set('sb-name',nom);set('sb-avatar',nom.charAt(0).toUpperCase());renderPerfil();
+  var {error}=await sb.from('profiles').upsert({id:CU,name:nom});
+  if(error){alert('No se pudo guardar en el servidor: '+error.message);return;}
+  alert('✅ Perfil actualizado');
+}
+async function changePw(){
+  var act=document.getElementById('pw-actual').value,nva=document.getElementById('pw-nueva').value,conf=document.getElementById('pw-conf').value;
+  var el=document.getElementById('pw-msg');el.style.color='var(--muted)';el.textContent='Verificando...';
+  if(nva.length<6){el.style.color='var(--red)';el.textContent='Mínimo 6 caracteres.';return;}
+  if(nva!==conf){el.style.color='var(--red)';el.textContent='Las contraseñas no coinciden.';return;}
+  var {error:verifyErr}=await sb.auth.signInWithPassword({email:CU_EMAIL,password:act});
+  if(verifyErr){el.style.color='var(--red)';el.textContent='Contraseña actual incorrecta.';return;}
+  var {error}=await sb.auth.updateUser({password:nva});
+  if(error){el.style.color='var(--red)';el.textContent='Error al actualizar: '+error.message;return;}
+  el.style.color='var(--green)';el.textContent='✅ Actualizada';
+  document.getElementById('pw-actual').value='';document.getElementById('pw-nueva').value='';document.getElementById('pw-conf').value='';
+}
 
 // ══════════════════════════════════
 // IA
@@ -1301,8 +1531,8 @@ document.getElementById('n-ai-q').addEventListener('keydown',e=>{if(e.key==='Ent
 // INIT
 // ══════════════════════════════════
 function initApp(){
-  var u=getUsers()[CU];var nm=u?.name||CU;
-  set('sb-name',nm);set('sb-email',CU);set('sb-avatar',(nm.charAt(0)||'?').toUpperCase());
+  var nm=profileName||CU_EMAIL;
+  set('sb-name',nm);set('sb-email',CU_EMAIL);set('sb-avatar',(nm.charAt(0)||'?').toUpperCase());
   initRate();initBusinesses();
   updCats('p');updCats('n');
   updateMonthLabel();
