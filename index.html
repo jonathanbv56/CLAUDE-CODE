@@ -420,7 +420,7 @@ select option{background:var(--surface2)}
               <div class="fg"><label>Categoría</label><select id="f-cat"></select></div>
             </div>
             <div class="fg"><label>Descripción</label><input type="text" id="f-desc" placeholder="Ej: Alquiler, Salario, Netflix..."></div>
-            <div class="fg"><label>Monto mensual (L)</label><input type="number" id="f-monto" placeholder="0.00" min="0" step="0.01"></div>
+            <div class="frow"><div class="fg"><label>Monto mensual</label><input type="number" id="f-monto" placeholder="0.00" min="0" step="0.01"></div><div class="fg"><label>Moneda</label><div class="cur-tog"><div class="cb ac" id="f-hnl" onclick="setFCur('HNL')">L HNL</div><div class="cb" id="f-usd" onclick="setFCur('USD')">$ USD</div></div></div></div>
             <button class="btn-p" onclick="addFijo()">+ Agregar fijo</button>
             <div style="font-size:11px;color:var(--muted);margin-top:.6rem;line-height:1.5">💡 Se registra automáticamente cada mes en tu balance, sin que tengas que volver a escribirlo. Al principio se programa para los próximos 12 meses; usá "Extender" cuando se acerque el límite.</div>
           </div>
@@ -1366,21 +1366,21 @@ function renderAhorros(){
 function getFijosFull(){
   return getDeudas().map(function(d){
     if(typeof d.nota==='string'&&d.nota.indexOf('§DATA§')===0){
-      try{var meta=JSON.parse(d.nota.slice(7));return Object.assign({},d,{esFijo:true,tipo:meta.tipo||'gasto',cat:meta.cat||'Otro',notaTxt:meta.note||''});}catch(e){}
+      try{var meta=JSON.parse(d.nota.slice(7));return Object.assign({},d,{esFijo:true,tipo:meta.tipo||'gasto',cat:meta.cat||'Otro',notaTxt:meta.note||'',cur:meta.cur||'HNL'});}catch(e){}
     }
-    return Object.assign({},d,{esFijo:false,tipo:'gasto',cat:'Deuda',notaTxt:d.nota||''});
+    return Object.assign({},d,{esFijo:false,tipo:'gasto',cat:'Deuda',notaTxt:d.nota||'',cur:'HNL'});
   });
 }
 // Genera movimientos automáticos para "n" meses consecutivos a partir del mes
 // seleccionado actualmente. Evita duplicados si ya existe un movimiento igual
 // en ese mes (mismo tipo+categoría+descripción).
 function generarMovsRecurrentes(def,n){
-  var y=curYear,m=curMonth,pD=getPData(),count=0;
+  var y=curYear,m=curMonth,pD=getPData(),count=0,cur=def.cur||'HNL';
   for(var i=0;i<n;i++){
     var k=mkey(y,m);
     var yaExiste=(pD[k]||[]).some(function(mv){return mv.desc===def.nom&&mv.cat===def.cat&&mv.tipo===def.tipo;});
     if(!yaExiste){
-      var mov={id:Date.now()+count,tipo:def.tipo,cat:def.cat,desc:def.nom,monto:def.monto,cur:'HNL',montoHNL:def.monto,fecha:new Date().toLocaleDateString('es-HN')};
+      var mov={id:Date.now()+count,tipo:def.tipo,cat:def.cat,desc:def.nom,monto:def.monto,cur:cur,montoHNL:toHNL(def.monto,cur),fecha:new Date().toLocaleDateString('es-HN')};
       if(!pD[k])pD[k]=[];pD[k].push(mov);
       sb.from('movements').insert({id:mov.id,user_id:CU,business_id:'personal',period:k,tipo:mov.tipo,cat:mov.cat,descripcion:mov.desc,monto:mov.monto,cur:mov.cur,monto_hnl:mov.montoHNL,fecha:mov.fecha}).then(function(r){if(r.error)console.error('recurrente',r.error);});
       count++;
@@ -1417,6 +1417,13 @@ function elimDeuda(id){
   renderDeudas();refreshAll();
 }
 // ── FIJOS (gastos/ingresos fijos mensuales) ──
+var fCur='HNL';
+function setFCur(c){
+  fCur=c;
+  var elH=document.getElementById('f-hnl'),elU=document.getElementById('f-usd');
+  if(elH)elH.className='cb'+(c==='HNL'?' ac':'');
+  if(elU)elU.className='cb'+(c==='USD'?' ac':'');
+}
 function updFijoCats(){
   var tipo=document.getElementById('f-tipo').value,sel=document.getElementById('f-cat');
   if(sel)sel.innerHTML=getAllCats('p',tipo).map(c=>`<option>${c}</option>`).join('');
@@ -1426,10 +1433,10 @@ function addFijo(){
   var desc=document.getElementById('f-desc').value.trim();
   var monto=parseFloat(document.getElementById('f-monto').value)||0;
   if(!desc||monto<=0){alert('Completá descripción y monto');return;}
-  var nota='§DATA§'+JSON.stringify({k:'fijo',tipo:tipo,cat:cat,note:''});
+  var nota='§DATA§'+JSON.stringify({k:'fijo',tipo:tipo,cat:cat,note:'',cur:fCur});
   var item={id:Date.now(),nom:desc,cuota:monto,meses:0,nota:nota};
   var d=getDeudas();d.push(item);ss(uk('deudas'),d);
-  generarMovsRecurrentes({nom:'🔁 '+desc,cat:cat,tipo:tipo,monto:monto},12);
+  generarMovsRecurrentes({nom:'🔁 '+desc,cat:cat,tipo:tipo,monto:monto,cur:fCur},12);
   document.getElementById('f-desc').value='';document.getElementById('f-monto').value='';
   renderFijos();refreshAll();
 }
@@ -1447,7 +1454,7 @@ function elimFijo(id){
 function extenderFijos(){
   var fijos=getFijosFull().filter(function(f){return f.esFijo;});
   if(!fijos.length){alert('Todavía no tenés fijos agregados.');return;}
-  fijos.forEach(function(f){generarMovsRecurrentes({nom:'🔁 '+f.nom,cat:f.cat,tipo:f.tipo,monto:f.cuota},12);});
+  fijos.forEach(function(f){generarMovsRecurrentes({nom:'🔁 '+f.nom,cat:f.cat,tipo:f.tipo,monto:f.cuota,cur:f.cur},12);});
   alert('✅ Fijos extendidos 12 meses más.');
   refreshAll();
 }
@@ -1456,8 +1463,10 @@ function renderFijos(){
   var fijos=getFijosFull().filter(function(f){return f.esFijo;});
   if(!fijos.length){el.innerHTML='<div class="empty">Sin gastos/ingresos fijos aún</div>';return;}
   el.innerHTML=fijos.map(function(f){
-    var esGasto=f.tipo==='gasto';
-    return `<div style="background:${esGasto?'rgba(255,92,92,.05)':'rgba(200,242,97,.06)'};border:1px solid ${esGasto?'rgba(255,92,92,.1)':'rgba(200,242,97,.2)'};border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:500;font-size:13px">${esGasto?'💸':'💰'} ${f.nom}</div><div style="font-size:11px;color:var(--muted)">${f.cat} · ${esGasto?'Gasto fijo':'Ingreso fijo'}</div></div><div style="text-align:right"><div style="font-weight:700;color:${esGasto?'var(--red)':'var(--green)'}">${fmtL(f.cuota)}/mes</div><button class="btn-ghost" style="margin-top:4px" onclick="elimFijo(${f.id})" aria-label="Eliminar fijo ${f.nom}">✕</button></div></div></div>`;
+    var esGasto=f.tipo==='gasto',esUSD=f.cur==='USD';
+    var montoPrincipal=esUSD?('$ '+f.cuota.toFixed(2)):fmtL(f.cuota);
+    var montoSecundario=esUSD?fmtL(toHNL(f.cuota,'USD')):fmtU(f.cuota);
+    return `<div style="background:${esGasto?'rgba(255,92,92,.05)':'rgba(200,242,97,.06)'};border:1px solid ${esGasto?'rgba(255,92,92,.1)':'rgba(200,242,97,.2)'};border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:500;font-size:13px">${esGasto?'💸':'💰'} ${f.nom}</div><div style="font-size:11px;color:var(--muted)">${f.cat} · ${esGasto?'Gasto fijo':'Ingreso fijo'}</div></div><div style="text-align:right"><div style="font-weight:700;color:${esGasto?'var(--red)':'var(--green)'}">${montoPrincipal}/mes</div><div style="font-size:11px;color:var(--muted)">${montoSecundario}/mes</div><button class="btn-ghost" style="margin-top:4px" onclick="elimFijo(${f.id})" aria-label="Eliminar fijo ${f.nom}">✕</button></div></div></div>`;
   }).join('');
 }
 function addMeta(){var nom=document.getElementById('m-nom').value.trim(),obj=parseFloat(document.getElementById('m-obj').value)||0,act=parseFloat(document.getElementById('m-act').value)||0;if(!nom||obj<=0){alert('Completá nombre y objetivo');return;}var m=getMetas();m.push({id:Date.now(),nom,obj,act});ss(uk('metas'),m);document.getElementById('m-nom').value='';document.getElementById('m-obj').value='';document.getElementById('m-act').value='';renderMetas();}
