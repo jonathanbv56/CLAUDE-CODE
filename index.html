@@ -287,7 +287,7 @@ select option{background:var(--surface2)}
     <div class="tb-logo" onclick="goHome()">mis<span>datos</span>hn</div>
     <div class="tb-right">
       <div class="rate-badge"><div class="rdot"></div><span id="rate-home">...</span></div>
-      <button class="hamburger-btn" onclick="openSidebar()">
+      <button class="hamburger-btn" onclick="openSidebar()" aria-label="Abrir menú">
         <div class="hb-line"></div><div class="hb-line"></div><div class="hb-line"></div>
       </button>
     </div>
@@ -307,7 +307,7 @@ select option{background:var(--surface2)}
     <div class="tb-logo" onclick="goHome()">mis<span>datos</span>hn</div>
     <div class="tb-right">
       <div class="rate-badge"><div class="rdot"></div><span id="rate-display">...</span></div>
-      <button class="hamburger-btn" onclick="openSidebar()">
+      <button class="hamburger-btn" onclick="openSidebar()" aria-label="Abrir menú">
         <div class="hb-line"></div><div class="hb-line"></div><div class="hb-line"></div>
       </button>
     </div>
@@ -316,19 +316,19 @@ select option{background:var(--surface2)}
   <!-- Month picker -->
   <div class="month-nav">
     <div class="mnav-center">
-      <button class="mnav-btn" onclick="changeMonth(-1)">◀</button>
+      <button class="mnav-btn" onclick="changeMonth(-1)" aria-label="Mes anterior">◀</button>
       <div class="month-picker-wrap">
-        <div class="month-label" id="month-label" onclick="toggleMonthPicker()">—</div>
+        <div class="month-label" id="month-label" onclick="toggleMonthPicker()" role="button" tabindex="0" aria-label="Elegir mes">—</div>
         <div class="month-picker-drop" id="month-picker-drop">
           <div class="mp-year-row">
-            <button class="mp-year-btn" onclick="mpYear(-1)">◀</button>
+            <button class="mp-year-btn" onclick="mpYear(-1)" aria-label="Año anterior">◀</button>
             <span class="mp-year" id="mp-year-lbl">2025</span>
-            <button class="mp-year-btn" onclick="mpYear(1)">▶</button>
+            <button class="mp-year-btn" onclick="mpYear(1)" aria-label="Año siguiente">▶</button>
           </div>
           <div class="mp-months" id="mp-months-grid"></div>
         </div>
       </div>
-      <button class="mnav-btn" onclick="changeMonth(1)">▶</button>
+      <button class="mnav-btn" onclick="changeMonth(1)" aria-label="Mes siguiente">▶</button>
     </div>
     <div class="rollover-badges" id="rollover-display"></div>
   </div>
@@ -338,6 +338,7 @@ select option{background:var(--surface2)}
     <div class="snav ac" id="pn-res" onclick="showSec('p','res')">📊 Resumen</div>
     <div class="snav" id="pn-cats" onclick="showSec('p','cats')">🏷️ Categorías</div>
     <div class="snav" id="pn-movs" onclick="showSec('p','movs')">📋 Movimientos</div>
+    <div class="snav" id="pn-fijos" onclick="showSec('p','fijos')">🔁 Fijos</div>
     <div class="snav" id="pn-ahorro" onclick="showSec('p','ahorro')">💰 Ahorros</div>
     <div class="snav" id="pn-deudas" onclick="showSec('p','deudas')">💳 Deudas</div>
     <div class="snav" id="pn-metas" onclick="showSec('p','metas')">🎯 Metas</div>
@@ -408,6 +409,22 @@ select option{background:var(--surface2)}
         <div class="g2">
           <div class="card"><div class="ctitle">Registrar deuda</div><div class="fg"><label>Nombre</label><input type="text" id="d-nom" placeholder="Ej: Préstamo Banco"></div><div class="frow"><div class="fg"><label>Cuota/mes (L)</label><input type="number" id="d-cuota" placeholder="0.00"></div><div class="fg"><label>Meses restantes</label><input type="number" id="d-meses" placeholder="12" min="1"></div></div><div class="fg"><label>Nota</label><input type="text" id="d-nota" placeholder="Entidad, vencimiento..."></div><button class="btn-p" onclick="addDeuda()">+ Agregar deuda</button></div>
           <div class="card"><div class="ctitle">Mis deudas <span id="d-lbl"></span></div><div id="d-lista"><div class="empty">Sin deudas 🎉</div></div></div>
+        </div>
+      </div>
+      <div id="p-fijos" class="section">
+        <div class="g2">
+          <div class="card">
+            <div class="ctitle">Agregar gasto o ingreso fijo</div>
+            <div class="frow">
+              <div class="fg"><label>Tipo</label><select id="f-tipo" onchange="updFijoCats()"><option value="gasto">💸 Gasto fijo</option><option value="ingreso">💰 Ingreso fijo</option></select></div>
+              <div class="fg"><label>Categoría</label><select id="f-cat"></select></div>
+            </div>
+            <div class="fg"><label>Descripción</label><input type="text" id="f-desc" placeholder="Ej: Alquiler, Salario, Netflix..."></div>
+            <div class="fg"><label>Monto mensual (L)</label><input type="number" id="f-monto" placeholder="0.00" min="0" step="0.01"></div>
+            <button class="btn-p" onclick="addFijo()">+ Agregar fijo</button>
+            <div style="font-size:11px;color:var(--muted);margin-top:.6rem;line-height:1.5">💡 Se registra automáticamente cada mes en tu balance, sin que tengas que volver a escribirlo. Al principio se programa para los próximos 12 meses; usá "Extender" cuando se acerque el límite.</div>
+          </div>
+          <div class="card"><div class="ctitle">Mis fijos <button class="btn-sm" onclick="extenderFijos()" title="Programar 12 meses más para todos tus fijos activos">🔄 Extender 12 meses</button></div><div id="f-lista"><div class="empty">Sin gastos/ingresos fijos aún</div></div></div>
         </div>
       </div>
       <div id="p-metas" class="section">
@@ -901,9 +918,8 @@ function renderHomePage(){
   document.getElementById('home-greeting').textContent=greet+(profileName?', '+profileName.split(' ')[0]:'');
   var bizs=getBusinesses();
   var pMovs=getPData()[curKey()]||[];
-  var pIng=pMovs.filter(m=>m.tipo==='ingreso').reduce((a,m)=>a+m.montoHNL,0);
-  var pGas=pMovs.filter(m=>m.tipo==='gasto').reduce((a,m)=>a+m.montoHNL,0);
-  var pBal=pIng-pGas;
+  var pP=pParts(pMovs);
+  var pBal=pP.bal;
   var cardsHTML=`<div class="hc-card" onclick="sbGo('personal')">
     <div class="hc-arrow">→</div>
     <div class="hc-icon">👤</div>
@@ -936,7 +952,7 @@ function renderHomePage(){
   var chartsHTML='';
   var months=last6();
   var pLabels=months.map(m=>m.label);
-  var pBals=months.map(m=>{var mv=getPData()[m.key]||[];var i=mv.filter(x=>x.tipo==='ingreso').reduce((a,x)=>a+x.montoHNL,0);var g=mv.filter(x=>x.tipo==='gasto').reduce((a,x)=>a+x.montoHNL,0);return i-g;});
+  var pBals=months.map(m=>{var mv=getPData()[m.key]||[];return pParts(mv).bal;});
   chartsHTML+=`<div class="home-chart-card"><div class="home-chart-title">📊 Balance personal — últimos 6 meses</div><div class="mini-chart"><canvas id="hc-p"></canvas></div></div>`;
   if(bizs.length){
     bizs.forEach(b=>{
@@ -982,6 +998,8 @@ function selectMonth(m){computeRollover('p');computeRollover('n');curYear=mpPick
 function updateMonthLabel(){
   document.getElementById('month-label').textContent=MONTHS_ES[curMonth]+' '+curYear;
   updateRolloverDisplay();refreshAll();
+  var hv=document.getElementById('app-histview');
+  if(hv&&hv.classList.contains('active')){histShowCounts={};renderHistCombined();}
 }
 function changeMonth(d){computeRollover('p');computeRollover('n');curMonth+=d;if(curMonth>11){curMonth=0;curYear++;}if(curMonth<0){curMonth=11;curYear--;}updateMonthLabel();}
 
@@ -992,8 +1010,9 @@ function computeRollover(app){
   var movs=getMovsApp(app),ti=app==='p'?'ingreso':'venta',tg=app==='p'?'gasto':'costo';
   var ing=movs.filter(m=>m.tipo===ti).reduce((a,m)=>a+m.montoHNL,0);
   var gas=movs.filter(m=>m.tipo===tg).reduce((a,m)=>a+m.montoHNL,0);
+  var aho=app==='p'?movs.filter(m=>m.tipo==='ahorro').reduce((a,m)=>a+m.montoHNL,0):0;
   var roll=getRolloverApp(app,curYear,curMonth);
-  var bal=ing-gas+roll;
+  var bal=ing-gas-aho+roll;
   var ny=curYear,nm=curMonth+1;if(nm>11){nm=0;ny++;}
   var nk=mkey(ny,nm);
   if(app==='p'){var r=getPRollover();r[nk]=bal>0?bal:0;ss(uk('pRollover'),r);}
@@ -1224,6 +1243,7 @@ function showSec(app,sec){
   if(sec==='ahorro')renderAhorros();
   if(sec==='metas')renderMetas();
   if(sec==='deudas')renderDeudas();
+  if(sec==='fijos'){updFijoCats();renderFijos();}
   if(sec==='cats'){renderCatsList(app);}
   if(sec==='config'){renderBizLista();updBizRubro();}
   if(sec==='perfil')renderPerfil();
@@ -1233,6 +1253,13 @@ function showSec(app,sec){
 // MOVIMIENTOS
 // ══════════════════════════════════
 function getMovsApp(app){var k=curKey();if(app==='p'){var d=getPData();return d[k]||[];}else{if(!currentBizId)return[];var d2=getNData(currentBizId);return d2[k]||[];}}
+// El ahorro también resta del balance del mes: es dinero que sale de lo disponible.
+function pParts(movs){
+  var ing=movs.filter(m=>m.tipo==='ingreso').reduce((a,m)=>a+m.montoHNL,0);
+  var gas=movs.filter(m=>m.tipo==='gasto').reduce((a,m)=>a+m.montoHNL,0);
+  var aho=movs.filter(m=>m.tipo==='ahorro').reduce((a,m)=>a+m.montoHNL,0);
+  return{ing:ing,gas:gas,aho:aho,bal:ing-gas-aho};
+}
 function agregar(app){
   var tipo=document.getElementById(app+'-tipo').value,cat=document.getElementById(app+'-cat').value;
   var desc=document.getElementById(app+'-desc').value.trim()||cat;
@@ -1270,16 +1297,15 @@ function set(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
 function refreshAll(){updateHeroP();refreshHeroN();renderRec('p');renderRec('n');updateRolloverDisplay();}
 function updateHeroP(){
   var movs=getMovsApp('p');
-  var ing=movs.filter(m=>m.tipo==='ingreso').reduce((a,m)=>a+m.montoHNL,0);
-  var gas=movs.filter(m=>m.tipo==='gasto').reduce((a,m)=>a+m.montoHNL,0);
+  var p=pParts(movs),ing=p.ing,gas=p.gas,aho=p.aho;
   var roll=getRolloverApp('p',curYear,curMonth);
-  var balMes=ing-gas,balAcum=balMes+roll;
+  var balMes=p.bal,balAcum=balMes+roll;
   var allP=getPData(),totalAho=0;Object.values(allP).forEach(mv=>mv.forEach(m=>{if(m.tipo==='ahorro')totalAho+=m.montoHNL;}));
   set('ph-ing',fmtL(ing));set('ph-ing-usd',fmtU(ing));
   set('ph-gas',fmtL(gas));set('ph-gas-usd',fmtU(gas));
   set('ph-bal',fmtL(balMes));set('ph-bal-usd',fmtU(balMes));
   document.getElementById('ph-bal').className='hv '+(balMes>=0?'a1':'neg');
-  set('ph-bal-sub',balMes>=0?'✓ Positivo este mes':'⚠ Negativo este mes');
+  set('ph-bal-sub',(balMes>=0?'✓ Positivo este mes':'⚠ Negativo este mes')+(aho>0?' · incluye '+fmtL(aho)+' en ahorro':''));
   set('ph-bal-acum',fmtL(balAcum));set('ph-bal-acum-usd',fmtU(balAcum));
   set('ph-ing-s',movs.filter(m=>m.tipo==='ingreso').length+' entradas');
   set('ph-gas-s',movs.filter(m=>m.tipo==='gasto').length+' salidas');
@@ -1330,9 +1356,110 @@ function renderAhorros(){
   set('aho-mes-lps',fmtL(mesTot));set('aho-mes-usd',fmtU(mesTot));
   var el=document.getElementById('aho-lista');el.innerHTML=allAho.length?allAho.map(m=>`<div class="txi"><div class="txic ahorro">🏦</div><div class="txin"><div class="txd">${m.desc}</div><div class="txcat">${m.cat} · ${m.fecha}</div></div><div style="text-align:right"><div class="txa ahorro">+${fmtL(m.montoHNL)}</div><div class="txdt">+${fmtU(m.montoHNL)}</div></div></div>`).join(''):'<div class="empty">Registrá ahorros 💰</div>';
 }
-function addDeuda(){var nom=document.getElementById('d-nom').value.trim(),cuota=parseFloat(document.getElementById('d-cuota').value)||0,meses=parseInt(document.getElementById('d-meses').value)||0,nota=document.getElementById('d-nota').value.trim();if(!nom||cuota<=0){alert('Ingresá nombre y cuota');return;}var d=getDeudas();d.push({id:Date.now(),nom,cuota,meses,nota});ss(uk('deudas'),d);document.getElementById('d-nom').value='';document.getElementById('d-cuota').value='';document.getElementById('d-meses').value='';document.getElementById('d-nota').value='';renderDeudas();}
-function renderDeudas(){var deudas=getDeudas(),tc=deudas.reduce((a,d)=>a+d.cuota,0);var lbl=document.getElementById('d-lbl');if(lbl)lbl.textContent=deudas.length+' · '+fmtL(tc)+'/mes';var el=document.getElementById('d-lista');if(!el)return;el.innerHTML=deudas.length?deudas.map(d=>`<div style="background:rgba(255,92,92,.05);border:1px solid rgba(255,92,92,.1);border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:500;font-size:13px">${d.nom}</div><div style="font-size:11px;color:var(--muted)">${d.meses?d.meses+' meses restantes · Total: '+fmtL(d.cuota*d.meses):'Sin plazo definido'}</div>${d.nota?'<div style="font-size:11px;color:var(--muted)">'+d.nota+'</div>':''}</div><div style="text-align:right"><div style="font-weight:700;color:var(--red)">${fmtL(d.cuota)}/mes</div><div style="font-size:11px;color:var(--muted)">${fmtU(d.cuota)}/mes</div><button class="btn-ghost" style="margin-top:4px" onclick="elimDeuda(${d.id})">✕</button></div></div></div>`).join(''):'<div class="empty">Sin deudas 🎉</div>';}
-function elimDeuda(id){var d=getDeudas().filter(x=>x.id!==id);ss(uk('deudas'),d);renderDeudas();}
+// ══════════════════════════════════
+// DEUDAS Y FIJOS — comparten la misma tabla "deudas" (nom, cuota, meses, nota)
+// sin alterar su estructura: los "fijos" se distinguen guardando metadatos
+// codificados en el campo nota como "§DATA§"+JSON. Así ambas cosas generan
+// movimientos automáticos (gasto/ingreso) cada mes sin tener que registrarlos
+// a mano.
+// ══════════════════════════════════
+function getFijosFull(){
+  return getDeudas().map(function(d){
+    if(typeof d.nota==='string'&&d.nota.indexOf('§DATA§')===0){
+      try{var meta=JSON.parse(d.nota.slice(7));return Object.assign({},d,{esFijo:true,tipo:meta.tipo||'gasto',cat:meta.cat||'Otro',notaTxt:meta.note||''});}catch(e){}
+    }
+    return Object.assign({},d,{esFijo:false,tipo:'gasto',cat:'Deuda',notaTxt:d.nota||''});
+  });
+}
+// Genera movimientos automáticos para "n" meses consecutivos a partir del mes
+// seleccionado actualmente. Evita duplicados si ya existe un movimiento igual
+// en ese mes (mismo tipo+categoría+descripción).
+function generarMovsRecurrentes(def,n){
+  var y=curYear,m=curMonth,pD=getPData(),count=0;
+  for(var i=0;i<n;i++){
+    var k=mkey(y,m);
+    var yaExiste=(pD[k]||[]).some(function(mv){return mv.desc===def.nom&&mv.cat===def.cat&&mv.tipo===def.tipo;});
+    if(!yaExiste){
+      var mov={id:Date.now()+count,tipo:def.tipo,cat:def.cat,desc:def.nom,monto:def.monto,cur:'HNL',montoHNL:def.monto,fecha:new Date().toLocaleDateString('es-HN')};
+      if(!pD[k])pD[k]=[];pD[k].push(mov);
+      sb.from('movements').insert({id:mov.id,user_id:CU,business_id:'personal',period:k,tipo:mov.tipo,cat:mov.cat,descripcion:mov.desc,monto:mov.monto,cur:mov.cur,monto_hnl:mov.montoHNL,fecha:mov.fecha}).then(function(r){if(r.error)console.error('recurrente',r.error);});
+      count++;
+    }
+    m++;if(m>11){m=0;y++;}
+  }
+  MEM[uk('pData')]=pD;
+}
+function addDeuda(){
+  var nom=document.getElementById('d-nom').value.trim(),cuota=parseFloat(document.getElementById('d-cuota').value)||0,meses=parseInt(document.getElementById('d-meses').value)||0,nota=document.getElementById('d-nota').value.trim();
+  if(!nom||cuota<=0){alert('Ingresá nombre y cuota');return;}
+  var mesesFinal=meses>0?meses:12;
+  var d=getDeudas();d.push({id:Date.now(),nom,cuota,meses:mesesFinal,nota});ss(uk('deudas'),d);
+  generarMovsRecurrentes({nom:'💳 '+nom,cat:'Deuda',tipo:'gasto',monto:cuota},mesesFinal);
+  document.getElementById('d-nom').value='';document.getElementById('d-cuota').value='';document.getElementById('d-meses').value='';document.getElementById('d-nota').value='';
+  renderDeudas();refreshAll();
+  alert('✅ Deuda agregada. Se registrará sola como gasto los próximos '+mesesFinal+' meses.');
+}
+function renderDeudas(){
+  var deudas=getFijosFull().filter(function(d){return !d.esFijo;}),tc=deudas.reduce((a,d)=>a+d.cuota,0);
+  var lbl=document.getElementById('d-lbl');if(lbl)lbl.textContent=deudas.length+' · '+fmtL(tc)+'/mes';
+  var el=document.getElementById('d-lista');if(!el)return;
+  el.innerHTML=deudas.length?deudas.map(d=>`<div style="background:rgba(255,92,92,.05);border:1px solid rgba(255,92,92,.1);border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:500;font-size:13px">${d.nom}</div><div style="font-size:11px;color:var(--muted)">${d.meses?d.meses+' meses · Total: '+fmtL(d.cuota*d.meses):'Sin plazo definido'} · se registra sola cada mes</div>${d.notaTxt?'<div style="font-size:11px;color:var(--muted)">'+d.notaTxt+'</div>':''}</div><div style="text-align:right"><div style="font-weight:700;color:var(--red)">${fmtL(d.cuota)}/mes</div><div style="font-size:11px;color:var(--muted)">${fmtU(d.cuota)}/mes</div><button class="btn-ghost" style="margin-top:4px" onclick="elimDeuda(${d.id})" aria-label="Eliminar deuda ${d.nom}">✕</button></div></div></div>`).join(''):'<div class="empty">Sin deudas 🎉</div>';
+}
+function elimDeuda(id){
+  var deuda=getDeudas().find(function(x){return x.id===id;});
+  var d=getDeudas().filter(x=>x.id!==id);ss(uk('deudas'),d);
+  if(deuda&&!(typeof deuda.nota==='string'&&deuda.nota.indexOf('§DATA§')===0)){
+    var descTag='💳 '+deuda.nom,pD=getPData(),idsDel=[];
+    Object.keys(pD).forEach(function(k){pD[k]=(pD[k]||[]).filter(function(mv){if(mv.desc===descTag&&mv.cat==='Deuda'&&mv.tipo==='gasto'){idsDel.push(mv.id);return false;}return true;});});
+    MEM[uk('pData')]=pD;
+    if(idsDel.length)sb.from('movements').delete().in('id',idsDel).eq('user_id',CU).then(function(r){if(r.error)console.error('del deuda movs',r.error);});
+  }
+  renderDeudas();refreshAll();
+}
+// ── FIJOS (gastos/ingresos fijos mensuales) ──
+function updFijoCats(){
+  var tipo=document.getElementById('f-tipo').value,sel=document.getElementById('f-cat');
+  if(sel)sel.innerHTML=getAllCats('p',tipo).map(c=>`<option>${c}</option>`).join('');
+}
+function addFijo(){
+  var tipo=document.getElementById('f-tipo').value,cat=document.getElementById('f-cat').value;
+  var desc=document.getElementById('f-desc').value.trim();
+  var monto=parseFloat(document.getElementById('f-monto').value)||0;
+  if(!desc||monto<=0){alert('Completá descripción y monto');return;}
+  var nota='§DATA§'+JSON.stringify({k:'fijo',tipo:tipo,cat:cat,note:''});
+  var item={id:Date.now(),nom:desc,cuota:monto,meses:0,nota:nota};
+  var d=getDeudas();d.push(item);ss(uk('deudas'),d);
+  generarMovsRecurrentes({nom:'🔁 '+desc,cat:cat,tipo:tipo,monto:monto},12);
+  document.getElementById('f-desc').value='';document.getElementById('f-monto').value='';
+  renderFijos();refreshAll();
+}
+function elimFijo(id){
+  var f=getFijosFull().find(function(x){return x.id===id;});
+  var d=getDeudas().filter(function(x){return x.id!==id;});ss(uk('deudas'),d);
+  if(f){
+    var descTag='🔁 '+f.nom,pD=getPData(),idsDel=[];
+    Object.keys(pD).forEach(function(k){pD[k]=(pD[k]||[]).filter(function(mv){if(mv.desc===descTag&&mv.cat===f.cat&&mv.tipo===f.tipo){idsDel.push(mv.id);return false;}return true;});});
+    MEM[uk('pData')]=pD;
+    if(idsDel.length)sb.from('movements').delete().in('id',idsDel).eq('user_id',CU).then(function(r){if(r.error)console.error('del fijo movs',r.error);});
+  }
+  renderFijos();refreshAll();
+}
+function extenderFijos(){
+  var fijos=getFijosFull().filter(function(f){return f.esFijo;});
+  if(!fijos.length){alert('Todavía no tenés fijos agregados.');return;}
+  fijos.forEach(function(f){generarMovsRecurrentes({nom:'🔁 '+f.nom,cat:f.cat,tipo:f.tipo,monto:f.cuota},12);});
+  alert('✅ Fijos extendidos 12 meses más.');
+  refreshAll();
+}
+function renderFijos(){
+  var el=document.getElementById('f-lista');if(!el)return;
+  var fijos=getFijosFull().filter(function(f){return f.esFijo;});
+  if(!fijos.length){el.innerHTML='<div class="empty">Sin gastos/ingresos fijos aún</div>';return;}
+  el.innerHTML=fijos.map(function(f){
+    var esGasto=f.tipo==='gasto';
+    return `<div style="background:${esGasto?'rgba(255,92,92,.05)':'rgba(200,242,97,.06)'};border:1px solid ${esGasto?'rgba(255,92,92,.1)':'rgba(200,242,97,.2)'};border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:500;font-size:13px">${esGasto?'💸':'💰'} ${f.nom}</div><div style="font-size:11px;color:var(--muted)">${f.cat} · ${esGasto?'Gasto fijo':'Ingreso fijo'}</div></div><div style="text-align:right"><div style="font-weight:700;color:${esGasto?'var(--red)':'var(--green)'}">${fmtL(f.cuota)}/mes</div><button class="btn-ghost" style="margin-top:4px" onclick="elimFijo(${f.id})" aria-label="Eliminar fijo ${f.nom}">✕</button></div></div></div>`;
+  }).join('');
+}
 function addMeta(){var nom=document.getElementById('m-nom').value.trim(),obj=parseFloat(document.getElementById('m-obj').value)||0,act=parseFloat(document.getElementById('m-act').value)||0;if(!nom||obj<=0){alert('Completá nombre y objetivo');return;}var m=getMetas();m.push({id:Date.now(),nom,obj,act});ss(uk('metas'),m);document.getElementById('m-nom').value='';document.getElementById('m-obj').value='';document.getElementById('m-act').value='';renderMetas();}
 function renderMetas(){var metas=getMetas(),el=document.getElementById('m-lista');el.innerHTML=metas.length?metas.map(m=>{var pct=Math.min(100,Math.round((m.act/m.obj)*100)),col=pct>=80?'var(--green)':pct>=40?'var(--amber)':'var(--red)';return`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;margin-bottom:.4rem"><div><div style="font-weight:500;font-size:13px">${m.nom}</div><div style="font-size:11px;color:var(--muted)">${fmtL(m.act)} / ${fmtL(m.obj)}</div></div><div style="font-weight:800;color:${col}">${pct}%</div></div><div class="pb"><div class="pf" style="width:${pct}%;background:${col}"></div></div></div>`;}).join(''):'<div class="empty">Creá tu primera meta 🎯</div>';}
 
@@ -1407,7 +1534,7 @@ function last6(){var r=[];for(var i=5;i>=0;i--){var m=curMonth-i,y=curYear;while
 function renderCharts(app){
   var months=last6(),ti=app==='p'?'ingreso':'venta',tg=app==='p'?'gasto':'costo';
   var ings=[],gass=[],bals=[];
-  months.forEach(m=>{var mv=(app==='p'?getPData():getNData(currentBizId))[m.key]||[];var i=mv.filter(x=>x.tipo===ti).reduce((a,x)=>a+x.montoHNL,0);var g=mv.filter(x=>x.tipo===tg).reduce((a,x)=>a+x.montoHNL,0);ings.push(i);gass.push(g);bals.push(i-g);});
+  months.forEach(m=>{var mv=(app==='p'?getPData():getNData(currentBizId))[m.key]||[];var i=mv.filter(x=>x.tipo===ti).reduce((a,x)=>a+x.montoHNL,0);var g=mv.filter(x=>x.tipo===tg).reduce((a,x)=>a+x.montoHNL,0);var aho=app==='p'?mv.filter(x=>x.tipo==='ahorro').reduce((a,x)=>a+x.montoHNL,0):0;ings.push(i);gass.push(g);bals.push(i-g-aho);});
   var labels=months.map(m=>m.label);
   var barId=app+'-chart-bar';destroyChart(barId);
   var c1=document.getElementById(barId);if(c1)charts[barId]=new Chart(c1,{type:'bar',data:{labels,datasets:[{label:app==='p'?'Ingresos':'Ventas',data:ings,backgroundColor:'rgba(200,242,97,.7)',borderRadius:4},{label:app==='p'?'Gastos':'Costos',data:gass,backgroundColor:'rgba(255,92,92,.6)',borderRadius:4}]},options:{...CD,responsive:true,maintainAspectRatio:false}});
@@ -1444,7 +1571,7 @@ function renderGrafCombined(){
 function renderComboCharts(){
   var months=last6(),labels=months.map(m=>m.label);
   var pIngs=[],pGas=[],pBals=[];
-  months.forEach(m=>{var mv=getPData()[m.key]||[];var i=mv.filter(x=>x.tipo==='ingreso').reduce((a,x)=>a+x.montoHNL,0);var g=mv.filter(x=>x.tipo==='gasto').reduce((a,x)=>a+x.montoHNL,0);pIngs.push(i);pGas.push(g);pBals.push(i-g);});
+  months.forEach(m=>{var mv=getPData()[m.key]||[];var pp=pParts(mv);pIngs.push(pp.ing);pGas.push(pp.gas);pBals.push(pp.bal);});
   destroyChart('gc-p-bar');var c1=document.getElementById('gc-p-bar');
   if(c1)charts['gc-p-bar']=new Chart(c1,{type:'bar',data:{labels,datasets:[{label:'Ingresos',data:pIngs,backgroundColor:'rgba(200,242,97,.7)',borderRadius:4},{label:'Gastos',data:pGas,backgroundColor:'rgba(255,92,92,.6)',borderRadius:4}]},options:{...CD,responsive:true,maintainAspectRatio:false}});
   destroyChart('gc-p-line');var c2=document.getElementById('gc-p-line');
@@ -1472,7 +1599,49 @@ function renderComboCharts(){
 }
 
 // ══════════════════════════════════
-// HISTORIAL
+// HISTORIAL COMBINADO (personal + cada negocio, con paginación "Ver más")
+// ══════════════════════════════════
+var HIST_PAGE=4;
+var histShowCounts={};
+function openHistCombined(){
+  showScreen('app');showSpecialPanel('hist');setBnActive('hist');
+  histShowCounts={};
+  renderHistCombined();
+}
+function renderHistCombined(){
+  var k=curKey();
+  var html=`<div class="card"><div class="ctitle">🗂 Historial — ${MONTHS_ES[curMonth]} ${curYear}</div><div style="font-size:12px;color:var(--muted)">Usá las flechas de arriba para ver otro mes.</div></div>`;
+  html+=histScopeCard('personal','👤 Finanzas Personales',getPData()[k]||[],true);
+  getBusinesses().forEach(function(b){
+    html+=histScopeCard(b.id,(b.emoji||'🏪')+' '+b.name,getNData(b.id)[k]||[],false);
+  });
+  var el=document.getElementById('histview-content');if(el)el.innerHTML=html;
+}
+function histScopeCard(scopeId,title,movsIn,isP){
+  var movs=movsIn.slice().sort((a,b)=>b.id-a.id);
+  var shown=histShowCounts[scopeId]||HIST_PAGE;
+  var visible=movs.slice(0,shown);
+  var ti=isP?'ingreso':'venta',tg=isP?'gasto':'costo';
+  var ing=movs.filter(m=>m.tipo===ti).reduce((a,m)=>a+m.montoHNL,0);
+  var gas=movs.filter(m=>m.tipo===tg).reduce((a,m)=>a+m.montoHNL,0);
+  var aho=isP?movs.filter(m=>m.tipo==='ahorro').reduce((a,m)=>a+m.montoHNL,0):0;
+  var bal=ing-gas-aho;
+  var itemsHTML=visible.length?visible.map(m=>txHTML(m,isP?'p':'n',false)).join(''):'<div class="empty">Sin movimientos este mes</div>';
+  var restantes=movs.length-shown;
+  var moreBtn=restantes>0?`<button class="btn-sm" style="width:100%;margin-top:.6rem" onclick="histVerMas('${scopeId}')">Ver más (${restantes} más este mes)</button>`:'';
+  return `<div class="card"><div class="ctitle">${title} <span style="font-weight:400;color:var(--muted);font-size:11px;text-transform:none">${movs.length} movimientos</span></div>
+    <div style="display:flex;gap:14px;margin-bottom:.6rem;font-size:12px;color:var(--muted);flex-wrap:wrap">
+      <span>${isP?'Ingresos':'Ventas'}: <b style="color:var(--green)">${fmtL(ing)}</b></span>
+      <span>${isP?'Gastos':'Costos'}: <b style="color:var(--red)">${fmtL(gas)}</b></span>
+      ${isP?`<span>Ahorro: <b style="color:var(--amber)">${fmtL(aho)}</b></span>`:''}
+      <span>Balance: <b style="color:${bal>=0?'var(--green)':'var(--red)'}">${fmtL(bal)}</b></span>
+    </div>
+    <div>${itemsHTML}</div>${moreBtn}</div>`;
+}
+function histVerMas(scopeId){histShowCounts[scopeId]=(histShowCounts[scopeId]||HIST_PAGE)+10;renderHistCombined();}
+
+// ══════════════════════════════════
+// HISTORIAL POR APP (resumen mensual, vista dentro de cada app)
 // ══════════════════════════════════
 function renderHist(app){
   var store=app==='p'?getPData():(currentBizId?getNData(currentBizId):{});
@@ -1513,7 +1682,7 @@ function getCtx(app){
   var movs=getMovsApp(app),ti=app==='p'?'ingreso':'venta',tg=app==='p'?'gasto':'costo';
   var ing=movs.filter(m=>m.tipo===ti).reduce((a,m)=>a+m.montoHNL,0),gas=movs.filter(m=>m.tipo===tg).reduce((a,m)=>a+m.montoHNL,0);
   var roll=getRolloverApp(app,curYear,curMonth);var cats={};movs.forEach(m=>{cats[m.cat]=(cats[m.cat]||0)+m.montoHNL;});
-  if(app==='p'){var tc=getDeudas().reduce((a,d)=>a+d.cuota,0);var allP=getPData(),totalAho=0;Object.values(allP).forEach(mv=>mv.forEach(m=>{if(m.tipo==='ahorro')totalAho+=m.montoHNL;}));return`FINANZAS PERSONALES (${MONTHS_ES[curMonth]} ${curYear}) Honduras:\n- Ingresos: L${ing.toFixed(2)} ($${(ing/RATE).toFixed(2)})\n- Gastos: L${gas.toFixed(2)}\n- Balance mes: L${(ing-gas).toFixed(2)} | Acumulado: L${(ing-gas+roll).toFixed(2)}\n- Total ahorrado: L${totalAho.toFixed(2)}\n- Deudas/mes: L${tc.toFixed(2)}\n- Cambio: 1 USD = L${RATE.toFixed(2)}\n- Categorías: ${JSON.stringify(cats)}`;}
+  if(app==='p'){var pp=pParts(movs);var tc=getFijosFull().filter(d=>!d.esFijo).reduce((a,d)=>a+d.cuota,0);var allP=getPData(),totalAho=0;Object.values(allP).forEach(mv=>mv.forEach(m=>{if(m.tipo==='ahorro')totalAho+=m.montoHNL;}));return`FINANZAS PERSONALES (${MONTHS_ES[curMonth]} ${curYear}) Honduras:\n- Ingresos: L${ing.toFixed(2)} ($${(ing/RATE).toFixed(2)})\n- Gastos: L${gas.toFixed(2)}\n- Ahorro del mes: L${pp.aho.toFixed(2)} (ya descontado del balance)\n- Balance mes: L${pp.bal.toFixed(2)} | Acumulado: L${(pp.bal+roll).toFixed(2)}\n- Total ahorrado histórico: L${totalAho.toFixed(2)}\n- Deudas/mes: L${tc.toFixed(2)}\n- Cambio: 1 USD = L${RATE.toFixed(2)}\n- Categorías: ${JSON.stringify(cats)}`;}
   else{var biz=getBizById(currentBizId),st=getStockTipo(),tc2=Object.values(st).reduce((a,v)=>a+v.comp,0),tv=Object.values(st).reduce((a,v)=>a+v.vend,0);return`NEGOCIO: ${biz?.name||'?'} (${biz?.rubro||''}) (${MONTHS_ES[curMonth]} ${curYear}) Honduras:\n- Ventas: L${ing.toFixed(2)} ($${(ing/RATE).toFixed(2)})\n- Costos: L${gas.toFixed(2)}\n- Ganancia mes: L${(ing-gas).toFixed(2)} | Acumulado: L${(ing-gas+roll).toFixed(2)}\n- Margen: ${ing>0?Math.round(((ing-gas)/ing)*100):0}%\n- Stock disponible: ${Math.max(0,tc2-tv)}\n- Cambio: 1 USD = L${RATE.toFixed(2)}\n- Categorías: ${JSON.stringify(cats)}`;}
 }
 async function askIA(app,pregunta){
