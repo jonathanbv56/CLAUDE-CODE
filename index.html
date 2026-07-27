@@ -4,8 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MisDatosHN</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
+<script>
+// NOTA SEGURIDAD (SRI): agregá el atributo integrity="sha384-..." a los dos
+// <script> de arriba para protegerte si el CDN llegara a ser comprometido.
+// Sacá el hash exacto (no lo inventes: si no coincide byte a byte, el
+// navegador bloquea el script y la app deja de cargar) desde:
+//   Chart.js  -> https://cdnjs.com/libraries/Chart.js/4.4.1
+//                (botón "Copy Script Tag" junto a chart.umd.min.js — ya
+//                 trae integrity+crossorigin listos para pegar)
+//   Supabase  -> https://www.jsdelivr.com/package/npm/@supabase/supabase-js
+//                (elegí la versión 2.x exacta que estés usando y copiá el
+//                 tag que te da jsDelivr, también con integrity incluido)
+</script>
 <style>
 :root{--bg:#0f0f11;--surface:#19191e;--surface2:#222228;--border:rgba(255,255,255,0.07);--accent:#c8f261;--accent2:#7b61ff;--red:#ff5c5c;--green:#c8f261;--amber:#ffc45c;--text:#f0f0f0;--muted:#888;--r:14px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -240,7 +252,7 @@ select option{background:var(--surface2)}
       <div id="auth-reg" style="display:none">
         <div class="fg"><label>Nombre completo</label><input type="text" id="reg-name" placeholder="Tu nombre"></div>
         <div class="fg"><label>Correo electrónico</label><input type="email" id="reg-email" placeholder="tucorreo@email.com"></div>
-        <div class="fg"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="Mínimo 6 caracteres"></div>
+        <div class="fg"><label>Contraseña</label><input type="password" id="reg-pass" placeholder="Mínimo 10 caracteres"></div>
         <div class="fg"><label>Confirmar contraseña</label><input type="password" id="reg-pass2" placeholder="Repetir contraseña"></div>
         <button class="btn-p" onclick="doRegister()" id="reg-btn">Crear cuenta →</button>
         <div class="auth-err" id="reg-err"></div>
@@ -265,7 +277,7 @@ select option{background:var(--surface2)}
       <div class="auth-slogan">Elegí tu nueva contraseña</div>
     </div>
     <div class="auth-card">
-      <div class="fg"><label>Nueva contraseña</label><input type="password" id="reset-pass" placeholder="Mínimo 6 caracteres"></div>
+      <div class="fg"><label>Nueva contraseña</label><input type="password" id="reset-pass" placeholder="Mínimo 10 caracteres"></div>
       <div class="fg"><label>Confirmar contraseña</label><input type="password" id="reset-pass2" placeholder="Repetir contraseña"></div>
       <button class="btn-p" onclick="doSetNewPassword()">Guardar nueva contraseña →</button>
       <div class="auth-err" id="reset-err"></div>
@@ -617,6 +629,21 @@ function mkey(y,m){return y+'-'+String(m+1).padStart(2,'0');}
 function curKey(){return mkey(curYear,curMonth);}
 
 // ══════════════════════════════════
+// ESCAPE HTML — usar SIEMPRE al insertar texto de usuario dentro de
+// innerHTML o de un atributo HTML (aria-label, value, etc.). Nunca
+// usar texto de usuario dentro de un onclick="..." construido por
+// concatenación: aunque esté escapado, el navegador decodifica las
+// entidades antes de ejecutar el JS del atributo, así que no protege
+// ahí — para eso se usan data-attributes + addEventListener (ver
+// removeCatCustom / delegación de clicks más abajo).
+// ══════════════════════════════════
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+// ══════════════════════════════════
 // SUPABASE CLIENT
 // ══════════════════════════════════
 var SUPABASE_URL='https://fcpunepukrwpbjbmfuzv.supabase.co';
@@ -647,79 +674,167 @@ function getBizById(id){return getBusinesses().find(b=>b.id===id);}
 function getCatCustom(app,bid){var k=app==='p'?uk('catP'):uk('catN_'+bid);return ls(k,{ingreso:[],gasto:[],ahorro:[],venta:[],costo:[]});}
 
 // ══════════════════════════════════
-// SINCRONIZACIÓN CON SUPABASE
-// Cada vez que ss() guarda un arreglo/objeto "completo" (igual que
-// antes hacía con localStorage), lo replicamos en la tabla
-// correspondiente. Los movimientos (pData/nData) se manejan aparte
-// (insert/delete puntual) en agregar()/eliminar() para más eficiencia.
+// SINCRONIZACIÓN CON SUPABASE — basada en DIFFS, no en "borrar todo e
+// insertar todo".
+//
+// Por qué: el patrón anterior (delete().eq('user_id',CU) seguido de un
+// insert masivo) significa que, si el usuario tiene dos pestañas abiertas,
+// la última en sincronizar BORRA la tabla entera y reescribe solo lo que
+// esa pestaña tenía en memoria — perdiendo silenciosamente cualquier
+// cambio hecho en la otra pestaña mientras tanto. Acá en cambio se
+// compara el estado anterior conocido (SYNCED) contra el nuevo, y solo
+// se tocan las filas que realmente cambiaron: agregadas, editadas o
+// eliminadas. Esto no elimina el riesgo por completo (seguiría habiendo
+// conflicto si la MISMA fila se edita en dos pestañas al mismo tiempo),
+// pero reduce el radio de daño de "toda la tabla" a "esa fila puntual".
 // ══════════════════════════════════
+var SYNCED={}; // último estado conocido como sincronizado, por fullKey
+function snapshot(v){return v==null?v:JSON.parse(JSON.stringify(v));}
+
 var estSyncTimers={};
 function schedulePersist(fullKey,value){
   if(!CU)return;
   var m;
-  if(fullKey===uk('businesses'))return syncBusinesses(value);
-  if(fullKey===uk('deudas'))return syncDeudas(value);
-  if(fullKey===uk('metas'))return syncMetas(value);
-  if(fullKey===uk('pRollover'))return syncRollovers('personal',value);
-  if((m=fullKey.match(/_nRollover_(.+)$/)))return syncRollovers(m[1],value);
-  if(fullKey===uk('catP'))return syncCategorias('personal',value);
-  if((m=fullKey.match(/_catN_(.+)$/)))return syncCategorias(m[1],value);
+  if(fullKey===uk('businesses'))return diffSyncArray('businesses',fullKey,value,bizRow);
+  if(fullKey===uk('deudas'))return diffSyncArray('deudas',fullKey,value,deudaRow);
+  if(fullKey===uk('metas'))return diffSyncArray('metas',fullKey,value,metaRow);
+  if(fullKey===uk('pRollover'))return diffSyncRollovers('personal',fullKey,value);
+  if((m=fullKey.match(/_nRollover_(.+)$/)))return diffSyncRollovers(m[1],fullKey,value);
+  if(fullKey===uk('catP'))return diffSyncCategorias('personal',fullKey,value);
+  if((m=fullKey.match(/_catN_(.+)$/)))return diffSyncCategorias(m[1],fullKey,value);
   if((m=fullKey.match(/_estGrupos_(.+)$/))){
     var bid=m[1];clearTimeout(estSyncTimers[bid]);
-    estSyncTimers[bid]=setTimeout(function(){syncEstimados(bid,value);},600);
+    estSyncTimers[bid]=setTimeout(function(){diffSyncArray('estimado_grupos',fullKey,value,function(g){return estRow(g,bid);});},600);
     return;
   }
   // pData / nData_* → persistidos directamente en agregar()/eliminar()
 }
-async function syncBusinesses(list){
+
+function bizRow(b){return{id:b.id,user_id:CU,name:b.name,rubro:b.rubro,emoji:b.emoji,nota:b.nota||null};}
+function deudaRow(d){return{id:d.id,user_id:CU,nom:d.nom,cuota:d.cuota,meses:d.meses||null,nota:d.nota||null};}
+function metaRow(m){return{id:m.id,user_id:CU,nom:m.nom,obj:m.obj,act:m.act};}
+function estRow(g,bid){return{id:g.id,user_id:CU,business_id:bid,nombre:g.nombre||'',tipo:g.tipo,cantidad:g.cantidad||0,precio:g.precio||0};}
+
+// Diff genérico para listas de objetos con "id" (negocios, deudas, metas,
+// grupos de estimado): inserta lo nuevo, actualiza lo cambiado, borra
+// solo lo que desapareció — nunca toca filas que no cambiaron.
+async function diffSyncArray(table,fullKey,nextArr,toRow){
+  var prevArr=SYNCED[fullKey]||[];
+  var prevMap={};prevArr.forEach(function(x){prevMap[x.id]=x;});
+  var nextMap={};(nextArr||[]).forEach(function(x){nextMap[x.id]=x;});
+  var toInsert=[],toUpdate=[],toDeleteIds=[];
+  Object.keys(nextMap).forEach(function(id){
+    if(!(id in prevMap))toInsert.push(nextMap[id]);
+    else if(JSON.stringify(prevMap[id])!==JSON.stringify(nextMap[id]))toUpdate.push(nextMap[id]);
+  });
+  Object.keys(prevMap).forEach(function(id){if(!(id in nextMap))toDeleteIds.push(prevMap[id].id);});
   try{
-    await sb.from('businesses').delete().eq('user_id',CU);
-    if(list.length)await sb.from('businesses').insert(list.map(b=>({id:b.id,user_id:CU,name:b.name,rubro:b.rubro,emoji:b.emoji,nota:b.nota||null})));
-  }catch(e){console.error('syncBusinesses',e);}
+    if(toDeleteIds.length)await sb.from(table).delete().eq('user_id',CU).in('id',toDeleteIds);
+    if(toInsert.length)await sb.from(table).insert(toInsert.map(toRow));
+    for(var i=0;i<toUpdate.length;i++){await sb.from(table).update(toRow(toUpdate[i])).eq('id',toUpdate[i].id).eq('user_id',CU);}
+    SYNCED[fullKey]=snapshot(nextArr);
+  }catch(e){console.error('diffSyncArray '+table,e);}
 }
-async function syncDeudas(list){
+
+// Diff para rollovers (objeto period → monto dentro de un scope). Solo
+// se borran/insertan los períodos que efectivamente cambiaron.
+async function diffSyncRollovers(scope,fullKey,nextObj){
+  var prevObj=SYNCED[fullKey]||{};
+  nextObj=nextObj||{};
+  var changedPeriods=[],rows=[];
+  Object.keys(nextObj).forEach(function(period){
+    if(prevObj[period]===undefined||prevObj[period]!==nextObj[period]){changedPeriods.push(period);rows.push({user_id:CU,business_id:scope,period:period,amount:nextObj[period]});}
+  });
+  Object.keys(prevObj).forEach(function(period){if(nextObj[period]===undefined)changedPeriods.push(period);});
   try{
-    await sb.from('deudas').delete().eq('user_id',CU);
-    if(list.length)await sb.from('deudas').insert(list.map(d=>({id:d.id,user_id:CU,nom:d.nom,cuota:d.cuota,meses:d.meses||null,nota:d.nota||null})));
-  }catch(e){console.error('syncDeudas',e);}
-}
-async function syncMetas(list){
-  try{
-    await sb.from('metas').delete().eq('user_id',CU);
-    if(list.length)await sb.from('metas').insert(list.map(m=>({id:m.id,user_id:CU,nom:m.nom,obj:m.obj,act:m.act})));
-  }catch(e){console.error('syncMetas',e);}
-}
-async function syncCategorias(scope,catsObj){
-  try{
-    await sb.from('categorias').delete().eq('user_id',CU).eq('business_id',scope);
-    var rows=[];
-    Object.keys(catsObj||{}).forEach(function(tipo){(catsObj[tipo]||[]).forEach(function(nombre){rows.push({user_id:CU,business_id:scope,tipo,nombre});});});
-    if(rows.length)await sb.from('categorias').insert(rows);
-  }catch(e){console.error('syncCategorias',e);}
-}
-async function syncRollovers(scope,rollObj){
-  try{
-    await sb.from('rollovers').delete().eq('user_id',CU).eq('business_id',scope);
-    var rows=Object.keys(rollObj||{}).map(function(period){return{user_id:CU,business_id:scope,period,amount:rollObj[period]};});
+    if(changedPeriods.length)await sb.from('rollovers').delete().eq('user_id',CU).eq('business_id',scope).in('period',changedPeriods);
     if(rows.length)await sb.from('rollovers').insert(rows);
-  }catch(e){console.error('syncRollovers',e);}
+    SYNCED[fullKey]=snapshot(nextObj);
+  }catch(e){console.error('diffSyncRollovers',e);}
 }
-async function syncEstimados(bizId,list){
+
+// Diff para categorías (objeto tipo → [nombres] dentro de un scope). Solo
+// se borran/insertan los nombres que efectivamente se agregaron o
+// quitaron, tipo por tipo.
+async function diffSyncCategorias(scope,fullKey,nextObj){
+  var prevObj=SYNCED[fullKey]||{};
+  nextObj=nextObj||{};
+  var tipos=new Set(Object.keys(prevObj).concat(Object.keys(nextObj)));
+  var toInsert=[],toDeleteMatches=[];
+  tipos.forEach(function(tipo){
+    var prevSet=new Set(prevObj[tipo]||[]);
+    var nextSet=new Set(nextObj[tipo]||[]);
+    nextSet.forEach(function(nombre){if(!prevSet.has(nombre))toInsert.push({user_id:CU,business_id:scope,tipo:tipo,nombre:nombre});});
+    prevSet.forEach(function(nombre){if(!nextSet.has(nombre))toDeleteMatches.push({tipo:tipo,nombre:nombre});});
+  });
   try{
-    await sb.from('estimado_grupos').delete().eq('user_id',CU).eq('business_id',bizId);
-    if(list.length)await sb.from('estimado_grupos').insert(list.map(g=>({id:g.id,user_id:CU,business_id:bizId,nombre:g.nombre||'',tipo:g.tipo,cantidad:g.cantidad||0,precio:g.precio||0})));
-  }catch(e){console.error('syncEstimados',e);}
+    for(var i=0;i<toDeleteMatches.length;i++){
+      await sb.from('categorias').delete().eq('user_id',CU).eq('business_id',scope).eq('tipo',toDeleteMatches[i].tipo).eq('nombre',toDeleteMatches[i].nombre);
+    }
+    if(toInsert.length)await sb.from('categorias').insert(toInsert);
+    SYNCED[fullKey]=snapshot(nextObj);
+  }catch(e){console.error('diffSyncCategorias',e);}
 }
 
 // ══════════════════════════════════
 // CARGA INICIAL DE DATOS DESDE SUPABASE
+//
+// Los movimientos (tabla "movements") se cargan solo desde un punto de
+// corte (por defecto, los últimos MOVS_INITIAL_MONTHS meses) en vez de
+// traer el historial completo del usuario en cada login. Meses más
+// antiguos se cargan bajo demanda con loadOlderMovements() cuando el
+// usuario los pide desde Historial (evita que el login se vuelva cada
+// vez más lento a medida que se acumulan años de movimientos).
 // ══════════════════════════════════
+var MOVS_INITIAL_MONTHS=12;
+var oldestLoadedPeriod=null; // period 'YYYY-MM' más antiguo ya cargado
+var allMovsLoaded=false;     // true cuando ya no quedan meses más viejos
+
+function periodMonthsAgo(n){
+  var y=curYear,m=curMonth-n;while(m<0){m+=12;y--;}return mkey(y,m);
+}
+function ingestMovements(rows){
+  var pObj=getPData(),nByBiz={};
+  getBusinesses().forEach(function(b){nByBiz[b.id]=getNData(b.id);});
+  (rows||[]).forEach(function(r){
+    var mov={id:r.id,tipo:r.tipo,cat:r.cat,desc:r.descripcion,monto:Number(r.monto),cur:r.cur,montoHNL:Number(r.monto_hnl),fecha:r.fecha};
+    if(r.prendas){mov.prendas=r.prendas;mov.prendaTipo=r.prenda_tipo;}
+    if(r.business_id==='personal'){(pObj[r.period]=pObj[r.period]||[]).push(mov);}
+    else{nByBiz[r.business_id]=nByBiz[r.business_id]||{};(nByBiz[r.business_id][r.period]=nByBiz[r.business_id][r.period]||[]).push(mov);}
+  });
+  Object.values(pObj).forEach(function(arr){arr.sort(function(a,b){return b.id-a.id;});});
+  MEM[uk('pData')]=pObj;
+  Object.keys(nByBiz).forEach(function(bid){
+    Object.values(nByBiz[bid]).forEach(function(arr){arr.sort(function(a,b){return b.id-a.id;});});
+    MEM[uk('nData_'+bid)]=nByBiz[bid];
+  });
+}
+// Trae movimientos más antiguos que lo ya cargado. Se llama desde la
+// vista de Historial cuando el usuario quiere ver meses anteriores al
+// rango inicial. Devuelve la cantidad de movimientos nuevos cargados.
+async function loadOlderMovements(monthsBack){
+  if(!CU||allMovsLoaded||!oldestLoadedPeriod)return 0;
+  monthsBack=monthsBack||12;
+  var newCutoff=mkey(Number(oldestLoadedPeriod.slice(0,4))-Math.floor(monthsBack/12),0); // aproximado, se ajusta abajo
+  // Cálculo exacto del nuevo corte restando monthsBack meses a oldestLoadedPeriod:
+  var parts=oldestLoadedPeriod.split('-');var y=Number(parts[0]),m=Number(parts[1])-1-monthsBack;
+  while(m<0){m+=12;y--;}
+  newCutoff=mkey(y,m);
+  var {data,error}=await sb.from('movements').select('*').eq('user_id',CU).gte('period',newCutoff).lt('period',oldestLoadedPeriod);
+  if(error){console.error('loadOlderMovements',error);return 0;}
+  if(!data||!data.length){allMovsLoaded=true;return 0;}
+  ingestMovements(data);
+  oldestLoadedPeriod=newCutoff;
+  return data.length;
+}
 async function loadAllData(){
-  MEM={};
+  MEM={};SYNCED={};
+  oldestLoadedPeriod=periodMonthsAgo(MOVS_INITIAL_MONTHS-1);
+  allMovsLoaded=false;
   var [profRes,bizRes,movRes,rollRes,deudaRes,metaRes,catRes,estRes]=await Promise.all([
     sb.from('profiles').select('name').eq('id',CU).maybeSingle(),
     sb.from('businesses').select('*').eq('user_id',CU).order('created_at'),
-    sb.from('movements').select('*').eq('user_id',CU),
+    sb.from('movements').select('*').eq('user_id',CU).gte('period',oldestLoadedPeriod),
     sb.from('rollovers').select('*').eq('user_id',CU),
     sb.from('deudas').select('*').eq('user_id',CU).order('created_at'),
     sb.from('metas').select('*').eq('user_id',CU).order('created_at'),
@@ -727,19 +842,14 @@ async function loadAllData(){
     sb.from('estimado_grupos').select('*').eq('user_id',CU)
   ]);
   profileName=(profRes.data&&profRes.data.name)||'';
-  MEM[uk('businesses')]=(bizRes.data||[]).map(b=>({id:b.id,name:b.name,rubro:b.rubro,emoji:b.emoji,nota:b.nota}));
+  var businesses=(bizRes.data||[]).map(b=>({id:b.id,name:b.name,rubro:b.rubro,emoji:b.emoji,nota:b.nota}));
+  MEM[uk('businesses')]=businesses;
 
   var pObj={},nByBiz={};
-  (movRes.data||[]).forEach(r=>{
-    var mov={id:r.id,tipo:r.tipo,cat:r.cat,desc:r.descripcion,monto:Number(r.monto),cur:r.cur,montoHNL:Number(r.monto_hnl),fecha:r.fecha};
-    if(r.prendas){mov.prendas=r.prendas;mov.prendaTipo=r.prenda_tipo;}
-    if(r.business_id==='personal'){(pObj[r.period]=pObj[r.period]||[]).push(mov);}
-    else{nByBiz[r.business_id]=nByBiz[r.business_id]||{};(nByBiz[r.business_id][r.period]=nByBiz[r.business_id][r.period]||[]).push(mov);}
-  });
-  Object.values(pObj).forEach(arr=>arr.sort((a,b)=>b.id-a.id));
-  Object.values(nByBiz).forEach(o=>Object.values(o).forEach(arr=>arr.sort((a,b)=>b.id-a.id)));
+  businesses.forEach(function(b){nByBiz[b.id]={};});
   MEM[uk('pData')]=pObj;
   Object.keys(nByBiz).forEach(bid=>{MEM[uk('nData_'+bid)]=nByBiz[bid];});
+  ingestMovements(movRes.data||[]);
 
   var pRoll={},nRollByBiz={};
   (rollRes.data||[]).forEach(r=>{
@@ -763,6 +873,19 @@ async function loadAllData(){
   var estByBiz={};
   (estRes.data||[]).forEach(e=>{(estByBiz[e.business_id]=estByBiz[e.business_id]||[]).push({id:e.id,nombre:e.nombre,tipo:e.tipo,cantidad:Number(e.cantidad),precio:Number(e.precio)});});
   Object.keys(estByBiz).forEach(bid=>{MEM[uk('estGrupos_'+bid)]=estByBiz[bid];});
+
+  // Tomamos snapshot de todo lo que acabamos de cargar como "ya
+  // sincronizado", para que el próximo ss() sobre estas colecciones
+  // calcule el diff contra el estado real del servidor y no contra vacío
+  // (lo que insertaría de nuevo todo lo ya existente).
+  SYNCED[uk('businesses')]=snapshot(businesses);
+  SYNCED[uk('deudas')]=snapshot(MEM[uk('deudas')]);
+  SYNCED[uk('metas')]=snapshot(MEM[uk('metas')]);
+  SYNCED[uk('pRollover')]=snapshot(pRoll);
+  Object.keys(nRollByBiz).forEach(bid=>{SYNCED[uk('nRollover_'+bid)]=snapshot(nRollByBiz[bid]);});
+  SYNCED[uk('catP')]=snapshot(catP);
+  Object.keys(catNByBiz).forEach(bid=>{SYNCED[uk('catN_'+bid)]=snapshot(catNByBiz[bid]);});
+  Object.keys(estByBiz).forEach(bid=>{SYNCED[uk('estGrupos_'+bid)]=snapshot(estByBiz[bid]);});
 }
 
 // ══════════════════════════════════
@@ -788,7 +911,7 @@ function mapAuthError(error){
   var msg=(error&&error.message)||'Ocurrió un error.';
   if(/already registered|already exists/i.test(msg))return'Este correo ya está registrado.';
   if(/Invalid login credentials/i.test(msg))return'Correo o contraseña incorrectos.';
-  if(/Password should be at least/i.test(msg))return'Mínimo 6 caracteres en contraseña.';
+  if(/Password should be at least/i.test(msg))return'Mínimo 10 caracteres en contraseña.';
   if(/rate limit/i.test(msg))return'Demasiados intentos. Esperá un momento.';
   return msg;
 }
@@ -796,7 +919,7 @@ async function doRegister(){
   var name=document.getElementById('reg-name').value.trim(),email=document.getElementById('reg-email').value.trim().toLowerCase();
   var pass=document.getElementById('reg-pass').value,pass2=document.getElementById('reg-pass2').value;
   if(!name||!email||!pass)return showAuthErr('reg-err','Completá todos los campos.');
-  if(pass.length<6)return showAuthErr('reg-err','Mínimo 6 caracteres en contraseña.');
+  if(pass.length<10)return showAuthErr('reg-err','Mínimo 10 caracteres en contraseña.');
   if(pass!==pass2)return showAuthErr('reg-err','Las contraseñas no coinciden.');
   var btn=document.getElementById('reg-btn');btn.disabled=true;btn.textContent='Creando cuenta...';
   var {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{name}}});
@@ -825,7 +948,7 @@ async function doRecover(){
 }
 async function doSetNewPassword(){
   var p1=document.getElementById('reset-pass').value,p2=document.getElementById('reset-pass2').value;
-  if(p1.length<6)return showAuthErr('reset-err','Mínimo 6 caracteres.');
+  if(p1.length<10)return showAuthErr('reset-err','Mínimo 10 caracteres.');
   if(p1!==p2)return showAuthErr('reset-err','Las contraseñas no coinciden.');
   var {error}=await sb.auth.updateUser({password:p1});
   if(error)return showAuthErr('reset-err',mapAuthError(error));
@@ -891,7 +1014,7 @@ function openSidebar(){
   // fill biz items
   var bizs=getBusinesses();
   document.getElementById('sb-biz-lbl').style.display=bizs.length?'block':'none';
-  document.getElementById('sb-biz-items').innerHTML=bizs.map(b=>`<div class="sb-item" onclick="sbGoBiz('${b.id}')"><div class="sb-icon">${b.emoji||'🏪'}</div>${b.name}</div>`).join('');
+  document.getElementById('sb-biz-items').innerHTML=bizs.map(b=>`<div class="sb-item" onclick="sbGoBiz('${b.id}')"><div class="sb-icon">${esc(b.emoji||'🏪')}</div>${esc(b.name)}</div>`).join('');
   document.getElementById('sb-cats-n').style.display=bizs.length?'flex':'none';
   sb.classList.add('open');ov.classList.add('open');
 }
@@ -935,9 +1058,9 @@ function renderHomePage(){
       var bBal=bIng-bGas;
       cardsHTML+=`<div class="hc-card biz" onclick="sbGoBiz('${b.id}')">
         <div class="hc-arrow">→</div>
-        <div class="hc-icon">${b.emoji||'🏪'}</div>
-        <div class="hc-title">${b.name}</div>
-        <div class="hc-sub">${getRubroLabel(b.rubro)}</div>
+        <div class="hc-icon">${esc(b.emoji||'🏪')}</div>
+        <div class="hc-title">${esc(b.name)}</div>
+        <div class="hc-sub">${esc(getRubroLabel(b.rubro))}</div>
         <div class="hc-bal biz">${fmtL(bBal)}</div>
       </div>`;
     });
@@ -956,7 +1079,7 @@ function renderHomePage(){
   chartsHTML+=`<div class="home-chart-card"><div class="home-chart-title">📊 Balance personal — últimos 6 meses</div><div class="mini-chart"><canvas id="hc-p"></canvas></div></div>`;
   if(bizs.length){
     bizs.forEach(b=>{
-      chartsHTML+=`<div class="home-chart-card"><div class="home-chart-title">${b.emoji||'🏪'} ${b.name} — últimos 6 meses</div><div class="mini-chart"><canvas id="hc-n-${b.id}"></canvas></div></div>`;
+      chartsHTML+=`<div class="home-chart-card"><div class="home-chart-title">${esc(b.emoji||'🏪')} ${esc(b.name)} — últimos 6 meses</div><div class="mini-chart"><canvas id="hc-n-${b.id}"></canvas></div></div>`;
     });
   }
   document.getElementById('home-charts').innerHTML=chartsHTML;
@@ -1078,7 +1201,7 @@ function getPrendaTipos(bid){
 function savePrendaTipoIfNew(){/* derivado automáticamente desde los movimientos, no requiere guardado aparte */}
 function renderPrendaTiposList(){
   var dl=document.getElementById('n-prenda-tipo-list');if(!dl)return;
-  dl.innerHTML=getPrendaTipos(currentBizId).map(t=>`<option value="${t}">`).join('');
+  dl.innerHTML=getPrendaTipos(currentBizId).map(t=>`<option value="${esc(t)}">`).join('');
 }
 
 // ══════════════════════════════════
@@ -1102,7 +1225,7 @@ function getAllCats(app,tipo){var base=app==='p'?BASE_CATS[tipo]:(getBizBaseCats
 function updCats(app){
   var tipo=document.getElementById(app+'-tipo').value;
   var sel=document.getElementById(app+'-cat');
-  sel.innerHTML=getAllCats(app,tipo).map(c=>`<option>${c}</option>`).join('');
+  sel.innerHTML=getAllCats(app,tipo).map(c=>`<option>${esc(c)}</option>`).join('');
   if(app==='n')document.getElementById('prendas-lbl-cant').textContent=tipo==='venta'?'Cantidad vendida':'Cantidad comprada';
 }
 function addCatCustom(app){
@@ -1131,12 +1254,20 @@ function renderCatsList(app){
   var html='';
   tipos.forEach(t=>{
     html+=`<div style="margin-bottom:.7rem"><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:.25rem">${t}</div>`;
-    (base[t]||[]).forEach(c=>html+=`<span class="cat-chip">${c}</span>`);
-    (custom[t]||[]).forEach(c=>html+=`<span class="cat-chip custom">${c} <button onclick="removeCatCustom('${app}','${t}','${c}')">✕</button></span>`);
+    (base[t]||[]).forEach(c=>html+=`<span class="cat-chip">${esc(c)}</span>`);
+    (custom[t]||[]).forEach(c=>html+=`<span class="cat-chip custom">${esc(c)} <button class="cat-del-btn" data-app="${esc(app)}" data-tipo="${esc(t)}" data-nombre="${esc(c)}" aria-label="Eliminar categoría ${esc(c)}">✕</button></span>`);
     html+='</div>';
   });
   el.innerHTML=html||'<div class="empty">Sin categorías</div>';
 }
+// Delegación de clicks: nunca insertamos el nombre de la categoría dentro
+// de un onclick="..." (eso permitiría inyección de JS vía un nombre de
+// categoría con comillas). En su lugar leemos el valor real desde el
+// dataset del elemento, que el navegador nunca reinterpreta como código.
+document.addEventListener('click',function(e){
+  var btn=e.target.closest('.cat-del-btn');
+  if(btn)removeCatCustom(btn.dataset.app,btn.dataset.tipo,btn.dataset.nombre);
+});
 
 // ══════════════════════════════════
 // BUSINESS
@@ -1149,7 +1280,7 @@ function initBusinesses(){
 }
 function renderBizTabs(){
   var bizs=getBusinesses(),el=document.getElementById('biz-tabs-row');
-  el.innerHTML=bizs.map(b=>`<div class="biz-tab${b.id===currentBizId?' ac':''}" onclick="selectBiz('${b.id}')">${b.emoji||'🏪'} ${b.name}</div>`).join('');
+  el.innerHTML=bizs.map(b=>`<div class="biz-tab${b.id===currentBizId?' ac':''}" onclick="selectBiz('${b.id}')">${esc(b.emoji||'🏪')} ${esc(b.name)}</div>`).join('');
 }
 function selectBiz(id){
   currentBizId=id;renderBizTabs();updCats('n');refreshHeroN();renderRec('n');
@@ -1166,9 +1297,9 @@ function renderBizHome(){
     var bGas=nd.filter(m=>m.tipo==='costo').reduce((a,m)=>a+m.montoHNL,0);
     return `<div class="hc-card biz" onclick="selectBiz('${b.id}');showSec('n','res')">
       <div class="hc-arrow">→</div>
-      <div class="hc-icon">${b.emoji||'🏪'}</div>
-      <div class="hc-title">${b.name}</div>
-      <div class="hc-sub">${getRubroLabel(b.rubro)}</div>
+      <div class="hc-icon">${esc(b.emoji||'🏪')}</div>
+      <div class="hc-title">${esc(b.name)}</div>
+      <div class="hc-sub">${esc(getRubroLabel(b.rubro))}</div>
       <div class="hc-bal biz">${fmtL(bIng-bGas)}</div>
     </div>`;
   }).join('');
@@ -1197,7 +1328,7 @@ function cancelBizEdit(){document.getElementById('biz-edit-id').value='';documen
 function newBiz(){cancelBizEdit();}
 function renderBizLista(){
   var bizs=getBusinesses(),el=document.getElementById('biz-lista');
-  el.innerHTML=bizs.length?bizs.map(b=>`<div class="biz-card"><div class="biz-icon-big">${b.emoji||'🏪'}</div><div style="flex:1"><div style="font-weight:600;font-size:13px">${b.name}</div><div style="font-size:11px;color:var(--muted)">${getRubroLabel(b.rubro)}${b.nota?' · '+b.nota:''}</div></div><div style="display:flex;flex-direction:column;gap:4px"><button class="btn-sm n" onclick="selectBiz('${b.id}');showSec('n','res')">Ir</button><button class="btn-sm" onclick="editBiz('${b.id}')">✏️</button><button class="btn-ghost" onclick="deleteBiz('${b.id}')">✕</button></div></div>`).join(''):'<div class="empty">Sin negocios creados</div>';
+  el.innerHTML=bizs.length?bizs.map(b=>`<div class="biz-card"><div class="biz-icon-big">${esc(b.emoji||'🏪')}</div><div style="flex:1"><div style="font-weight:600;font-size:13px">${esc(b.name)}</div><div style="font-size:11px;color:var(--muted)">${esc(getRubroLabel(b.rubro))}${b.nota?' · '+esc(b.nota):''}</div></div><div style="display:flex;flex-direction:column;gap:4px"><button class="btn-sm n" onclick="selectBiz('${b.id}');showSec('n','res')">Ir</button><button class="btn-sm" onclick="editBiz('${b.id}')" aria-label="Editar ${esc(b.name)}">✏️</button><button class="btn-ghost" onclick="deleteBiz('${b.id}')" aria-label="Eliminar ${esc(b.name)}">✕</button></div></div>`).join(''):'<div class="empty">Sin negocios creados</div>';
 }
 function updBizRubro(){var r=document.getElementById('biz-rubro').value;var cats=RUBRO_CATS[r]||RUBRO_CATS.otro;var all=[...cats.venta,...cats.costo];document.getElementById('biz-sugeridas').innerHTML=all.map(c=>`<span class="cat-chip">${c}</span>`).join('');}
 
@@ -1334,7 +1465,7 @@ function refreshHeroN(){
 }
 function txHTML(m,app,del){
   var neg=m.tipo==='gasto'||m.tipo==='costo';
-  return`<div class="txi"><div class="txic ${m.tipo}">${ICONS[m.tipo]||'📌'}</div><div class="txin"><div class="txd">${m.desc}</div><div class="txcat">${m.cat}${m.prendas?' · '+m.prendas+' '+m.prendaTipo:''} · ${m.fecha}</div></div><div style="text-align:right"><div class="txa ${m.tipo}">${neg?'-':'+'}${fmtL(m.montoHNL)}</div><div class="txdt">${neg?'-':'+'}${fmtU(m.montoHNL)}</div>${m.cur==='USD'?'<div class="txdt">orig. $'+m.monto.toFixed(2)+'</div>':''}${del?'<button class="btn-ghost" onclick="eliminar(\''+app+'\','+m.id+')">✕</button>':''}</div></div>`;
+  return`<div class="txi"><div class="txic ${m.tipo}">${ICONS[m.tipo]||'📌'}</div><div class="txin"><div class="txd">${esc(m.desc)}</div><div class="txcat">${esc(m.cat)}${m.prendas?' · '+m.prendas+' '+esc(m.prendaTipo):''} · ${m.fecha}</div></div><div style="text-align:right"><div class="txa ${m.tipo}">${neg?'-':'+'}${fmtL(m.montoHNL)}</div><div class="txdt">${neg?'-':'+'}${fmtU(m.montoHNL)}</div>${m.cur==='USD'?'<div class="txdt">orig. $'+m.monto.toFixed(2)+'</div>':''}${del?'<button class="btn-ghost" onclick="eliminar(\''+app+'\','+m.id+')" aria-label="Eliminar movimiento">✕</button>':''}</div></div>`;
 }
 function renderRec(app){var movs=getMovsApp(app).slice(0,6),el=document.getElementById(app+'-lista-rec');el.innerHTML=movs.length?movs.map(m=>txHTML(m,app,false)).join(''):'<div class="empty">Sin movimientos este mes 🌱</div>';}
 function renderTodos(app){
@@ -1354,7 +1485,7 @@ function renderAhorros(){
   var mesTot=(getPData()[curKey()]||[]).filter(m=>m.tipo==='ahorro').reduce((a,m)=>a+m.montoHNL,0);
   set('aho-total-lps',fmtL(total));set('aho-total-usd',fmtU(total));set('aho-count',allAho.length+' registros');
   set('aho-mes-lps',fmtL(mesTot));set('aho-mes-usd',fmtU(mesTot));
-  var el=document.getElementById('aho-lista');el.innerHTML=allAho.length?allAho.map(m=>`<div class="txi"><div class="txic ahorro">🏦</div><div class="txin"><div class="txd">${m.desc}</div><div class="txcat">${m.cat} · ${m.fecha}</div></div><div style="text-align:right"><div class="txa ahorro">+${fmtL(m.montoHNL)}</div><div class="txdt">+${fmtU(m.montoHNL)}</div></div></div>`).join(''):'<div class="empty">Registrá ahorros 💰</div>';
+  var el=document.getElementById('aho-lista');el.innerHTML=allAho.length?allAho.map(m=>`<div class="txi"><div class="txic ahorro">🏦</div><div class="txin"><div class="txd">${esc(m.desc)}</div><div class="txcat">${esc(m.cat)} · ${m.fecha}</div></div><div style="text-align:right"><div class="txa ahorro">+${fmtL(m.montoHNL)}</div><div class="txdt">+${fmtU(m.montoHNL)}</div></div></div>`).join(''):'<div class="empty">Registrá ahorros 💰</div>';
 }
 // ══════════════════════════════════
 // DEUDAS Y FIJOS — comparten la misma tabla "deudas" (nom, cuota, meses, nota)
@@ -1403,7 +1534,7 @@ function renderDeudas(){
   var deudas=getFijosFull().filter(function(d){return !d.esFijo;}),tc=deudas.reduce((a,d)=>a+d.cuota,0);
   var lbl=document.getElementById('d-lbl');if(lbl)lbl.textContent=deudas.length+' · '+fmtL(tc)+'/mes';
   var el=document.getElementById('d-lista');if(!el)return;
-  el.innerHTML=deudas.length?deudas.map(d=>`<div style="background:rgba(255,92,92,.05);border:1px solid rgba(255,92,92,.1);border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:500;font-size:13px">${d.nom}</div><div style="font-size:11px;color:var(--muted)">${d.meses?d.meses+' meses · Total: '+fmtL(d.cuota*d.meses):'Sin plazo definido'} · se registra sola cada mes</div>${d.notaTxt?'<div style="font-size:11px;color:var(--muted)">'+d.notaTxt+'</div>':''}</div><div style="text-align:right"><div style="font-weight:700;color:var(--red)">${fmtL(d.cuota)}/mes</div><div style="font-size:11px;color:var(--muted)">${fmtU(d.cuota)}/mes</div><button class="btn-ghost" style="margin-top:4px" onclick="elimDeuda(${d.id})" aria-label="Eliminar deuda ${d.nom}">✕</button></div></div></div>`).join(''):'<div class="empty">Sin deudas 🎉</div>';
+  el.innerHTML=deudas.length?deudas.map(d=>`<div style="background:rgba(255,92,92,.05);border:1px solid rgba(255,92,92,.1);border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:500;font-size:13px">${esc(d.nom)}</div><div style="font-size:11px;color:var(--muted)">${d.meses?d.meses+' meses · Total: '+fmtL(d.cuota*d.meses):'Sin plazo definido'} · se registra sola cada mes</div>${d.notaTxt?'<div style="font-size:11px;color:var(--muted)">'+esc(d.notaTxt)+'</div>':''}</div><div style="text-align:right"><div style="font-weight:700;color:var(--red)">${fmtL(d.cuota)}/mes</div><div style="font-size:11px;color:var(--muted)">${fmtU(d.cuota)}/mes</div><button class="btn-ghost" style="margin-top:4px" onclick="elimDeuda(${d.id})" aria-label="Eliminar deuda ${esc(d.nom)}">✕</button></div></div></div>`).join(''):'<div class="empty">Sin deudas 🎉</div>';
 }
 function elimDeuda(id){
   var deuda=getDeudas().find(function(x){return x.id===id;});
@@ -1426,7 +1557,7 @@ function setFCur(c){
 }
 function updFijoCats(){
   var tipo=document.getElementById('f-tipo').value,sel=document.getElementById('f-cat');
-  if(sel)sel.innerHTML=getAllCats('p',tipo).map(c=>`<option>${c}</option>`).join('');
+  if(sel)sel.innerHTML=getAllCats('p',tipo).map(c=>`<option>${esc(c)}</option>`).join('');
 }
 function addFijo(){
   var tipo=document.getElementById('f-tipo').value,cat=document.getElementById('f-cat').value;
@@ -1466,11 +1597,11 @@ function renderFijos(){
     var esGasto=f.tipo==='gasto',esUSD=f.cur==='USD';
     var montoPrincipal=esUSD?('$ '+f.cuota.toFixed(2)):fmtL(f.cuota);
     var montoSecundario=esUSD?fmtL(toHNL(f.cuota,'USD')):fmtU(f.cuota);
-    return `<div style="background:${esGasto?'rgba(255,92,92,.05)':'rgba(200,242,97,.06)'};border:1px solid ${esGasto?'rgba(255,92,92,.1)':'rgba(200,242,97,.2)'};border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:500;font-size:13px">${esGasto?'💸':'💰'} ${f.nom}</div><div style="font-size:11px;color:var(--muted)">${f.cat} · ${esGasto?'Gasto fijo':'Ingreso fijo'}</div></div><div style="text-align:right"><div style="font-weight:700;color:${esGasto?'var(--red)':'var(--green)'}">${montoPrincipal}/mes</div><div style="font-size:11px;color:var(--muted)">${montoSecundario}/mes</div><button class="btn-ghost" style="margin-top:4px" onclick="elimFijo(${f.id})" aria-label="Eliminar fijo ${f.nom}">✕</button></div></div></div>`;
+    return `<div style="background:${esGasto?'rgba(255,92,92,.05)':'rgba(200,242,97,.06)'};border:1px solid ${esGasto?'rgba(255,92,92,.1)':'rgba(200,242,97,.2)'};border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-weight:500;font-size:13px">${esGasto?'💸':'💰'} ${esc(f.nom)}</div><div style="font-size:11px;color:var(--muted)">${esc(f.cat)} · ${esGasto?'Gasto fijo':'Ingreso fijo'}</div></div><div style="text-align:right"><div style="font-weight:700;color:${esGasto?'var(--red)':'var(--green)'}">${montoPrincipal}/mes</div><div style="font-size:11px;color:var(--muted)">${montoSecundario}/mes</div><button class="btn-ghost" style="margin-top:4px" onclick="elimFijo(${f.id})" aria-label="Eliminar fijo ${esc(f.nom)}">✕</button></div></div></div>`;
   }).join('');
 }
 function addMeta(){var nom=document.getElementById('m-nom').value.trim(),obj=parseFloat(document.getElementById('m-obj').value)||0,act=parseFloat(document.getElementById('m-act').value)||0;if(!nom||obj<=0){alert('Completá nombre y objetivo');return;}var m=getMetas();m.push({id:Date.now(),nom,obj,act});ss(uk('metas'),m);document.getElementById('m-nom').value='';document.getElementById('m-obj').value='';document.getElementById('m-act').value='';renderMetas();}
-function renderMetas(){var metas=getMetas(),el=document.getElementById('m-lista');el.innerHTML=metas.length?metas.map(m=>{var pct=Math.min(100,Math.round((m.act/m.obj)*100)),col=pct>=80?'var(--green)':pct>=40?'var(--amber)':'var(--red)';return`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;margin-bottom:.4rem"><div><div style="font-weight:500;font-size:13px">${m.nom}</div><div style="font-size:11px;color:var(--muted)">${fmtL(m.act)} / ${fmtL(m.obj)}</div></div><div style="font-weight:800;color:${col}">${pct}%</div></div><div class="pb"><div class="pf" style="width:${pct}%;background:${col}"></div></div></div>`;}).join(''):'<div class="empty">Creá tu primera meta 🎯</div>';}
+function renderMetas(){var metas=getMetas(),el=document.getElementById('m-lista');el.innerHTML=metas.length?metas.map(m=>{var pct=Math.min(100,Math.round((m.act/m.obj)*100)),col=pct>=80?'var(--green)':pct>=40?'var(--amber)':'var(--red)';return`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.75rem;margin-bottom:.5rem"><div style="display:flex;justify-content:space-between;margin-bottom:.4rem"><div><div style="font-weight:500;font-size:13px">${esc(m.nom)}</div><div style="font-size:11px;color:var(--muted)">${fmtL(m.act)} / ${fmtL(m.obj)}</div></div><div style="font-weight:800;color:${col}">${pct}%</div></div><div class="pb"><div class="pf" style="width:${pct}%;background:${col}"></div></div></div>`;}).join(''):'<div class="empty">Creá tu primera meta 🎯</div>';}
 
 // ══════════════════════════════════
 // INVENTARIO
@@ -1483,9 +1614,9 @@ function renderInventario(){
   var st=getStockTipo(),tc=Object.values(st).reduce((a,v)=>a+v.comp,0),tv=Object.values(st).reduce((a,v)=>a+v.vend,0);
   set('inv-compradas',compMes);set('inv-vendidas',vendMes);set('inv-stock',Math.max(0,tc-tv));set('inv-mes-vend',tv);
   var el=document.getElementById('inv-por-tipo'),tipos=Object.keys(st);
-  el.innerHTML=tipos.length?tipos.map(t=>{var rem=Math.max(0,st[t].comp-st[t].vend),pct=st[t].comp>0?Math.round((st[t].vend/st[t].comp)*100):0,col=rem<=0?'var(--red)':rem<=5?'var(--amber)':'var(--green)';return`<div class="prow"><div style="flex:1"><div style="font-weight:500;font-size:13px">${t}</div><div style="font-size:11px;color:var(--muted)">Comp: ${st[t].comp} · Vend: ${st[t].vend}</div></div><div style="text-align:right"><div style="font-weight:700;color:${col};font-size:14px">${rem} stock</div><div style="font-size:11px;color:var(--muted)">${pct}% vendido</div></div></div>`;}).join(''):'<div class="empty">Sin datos de prendas</div>';
+  el.innerHTML=tipos.length?tipos.map(t=>{var rem=Math.max(0,st[t].comp-st[t].vend),pct=st[t].comp>0?Math.round((st[t].vend/st[t].comp)*100):0,col=rem<=0?'var(--red)':rem<=5?'var(--amber)':'var(--green)';return`<div class="prow"><div style="flex:1"><div style="font-weight:500;font-size:13px">${esc(t)}</div><div style="font-size:11px;color:var(--muted)">Comp: ${st[t].comp} · Vend: ${st[t].vend}</div></div><div style="text-align:right"><div style="font-weight:700;color:${col};font-size:14px">${rem} stock</div><div style="font-size:11px;color:var(--muted)">${pct}% vendido</div></div></div>`;}).join(''):'<div class="empty">Sin datos de prendas</div>';
   var pmEl=document.getElementById('inv-movs'),prendasMovs=movsMes.filter(m=>m.prendas);
-  pmEl.innerHTML=prendasMovs.length?prendasMovs.map(m=>`<div class="prow"><div class="txic ${m.tipo}" style="width:28px;height:28px;font-size:12px">${m.tipo==='venta'?'📤':'📥'}</div><div style="flex:1"><div style="font-size:13px;font-weight:500">${m.desc}</div><div style="font-size:11px;color:var(--muted)">${m.prendaTipo} · ${m.fecha}</div></div><span style="background:${m.tipo==='venta'?'rgba(200,242,97,.12)':'rgba(123,97,255,.12)'};color:${m.tipo==='venta'?'var(--green)':'var(--accent2)'};padding:2px 8px;border-radius:20px;font-size:11px">${m.tipo==='venta'?'−':'+'} ${m.prendas}</span></div>`).join(''):'<div class="empty">Sin movimientos de prendas este mes</div>';
+  pmEl.innerHTML=prendasMovs.length?prendasMovs.map(m=>`<div class="prow"><div class="txic ${m.tipo}" style="width:28px;height:28px;font-size:12px">${m.tipo==='venta'?'📤':'📥'}</div><div style="flex:1"><div style="font-size:13px;font-weight:500">${esc(m.desc)}</div><div style="font-size:11px;color:var(--muted)">${esc(m.prendaTipo)} · ${m.fecha}</div></div><span style="background:${m.tipo==='venta'?'rgba(200,242,97,.12)':'rgba(123,97,255,.12)'};color:${m.tipo==='venta'?'var(--green)':'var(--accent2)'};padding:2px 8px;border-radius:20px;font-size:11px">${m.tipo==='venta'?'−':'+'} ${m.prendas}</span></div>`).join(''):'<div class="empty">Sin movimientos de prendas este mes</div>';
   var vt={};movsMes.filter(m=>m.tipo==='venta'&&m.prendas).forEach(m=>{vt[m.prendaTipo]=(vt[m.prendaTipo]||0)+m.prendas;});
   renderChartInv(Object.keys(vt),Object.values(vt));
 }
@@ -1508,11 +1639,11 @@ function renderEstimado(){
     return`<div id="eg-${g.id}" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:.8rem;margin-bottom:.5rem">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:.5rem;flex-wrap:wrap">
         <span style="font-size:11px;font-weight:800;color:var(--accent2)">G${i+1}</span>
-        <input style="flex:1;min-width:100px;padding:6px 10px;font-size:12px" type="text" placeholder="Nombre del grupo" value="${g.nombre}" oninput="updateGrupo(${g.id},'nombre',this.value)">
-        <button class="btn-ghost" onclick="removeGrupo(${g.id})">✕</button>
+        <input style="flex:1;min-width:100px;padding:6px 10px;font-size:12px" type="text" placeholder="Nombre del grupo" value="${esc(g.nombre)}" oninput="updateGrupo(${g.id},'nombre',this.value)">
+        <button class="btn-ghost" onclick="removeGrupo(${g.id})" aria-label="Quitar grupo">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr auto;gap:5px;align-items:end">
-        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px">Tipo ${sl}</div><select style="font-size:12px;padding:6px 8px" onchange="updateGrupo(${g.id},'tipo',this.value)">${opts.map(o=>`<option value="${o.tipo}"${g.tipo===o.tipo?' selected':''}>${o.tipo} (${o.rem})</option>`).join('')}<option value="${g.tipo}"${!opts.find(o=>o.tipo===g.tipo)?' selected':''}>✏️ ${g.tipo}</option></select></div>
+        <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px">Tipo ${sl}</div><select style="font-size:12px;padding:6px 8px" onchange="updateGrupo(${g.id},'tipo',this.value)">${opts.map(o=>`<option value="${esc(o.tipo)}"${g.tipo===o.tipo?' selected':''}>${esc(o.tipo)} (${o.rem})</option>`).join('')}<option value="${esc(g.tipo)}"${!opts.find(o=>o.tipo===g.tipo)?' selected':''}>✏️ ${esc(g.tipo)}</option></select></div>
         <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px">Cantidad</div><input type="number" style="font-size:12px;padding:6px 8px" min="0" step="1" value="${g.cantidad}" oninput="updateGrupo(${g.id},'cantidad',this.value)"></div>
         <div><div style="font-size:10px;color:var(--muted);margin-bottom:2px">Precio/u (L)</div><input type="number" class="in2" style="font-size:12px;padding:6px 8px" min="0" step="1" value="${g.precio||''}" oninput="updateGrupo(${g.id},'precio',this.value)" placeholder="0"></div>
         <div style="text-align:right;padding-bottom:1px"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">Sub</div><div style="font-weight:700;color:var(--accent2);font-size:12px" id="gsub-${g.id}">${g.precio&&g.cantidad?fmtL(g.precio*g.cantidad):'—'}</div></div>
@@ -1527,7 +1658,7 @@ function calcEstimado(){
   var desc=(parseFloat(document.getElementById('est-descuento')?.value)||0)/100;
   document.getElementById('est-pct-lbl').textContent=Math.round(pct*100)+'%';
   var total=0,detalles=[];
-  grupos.forEach(g=>{var u=Math.ceil((g.cantidad||0)*pct),sub=(g.precio||0)*u*(1-desc);total+=sub;var el=document.getElementById('gsub-'+g.id);if(el)el.textContent=g.precio>0?fmtL(sub):'—';if(g.precio>0)detalles.push(`${g.nombre||(g.tipo||'Grupo')}: ${u} × L${g.precio.toFixed(0)}${desc>0?' (-'+Math.round(desc*100)+'%)':''} = ${fmtL(sub)}`);});
+  grupos.forEach(g=>{var u=Math.ceil((g.cantidad||0)*pct),sub=(g.precio||0)*u*(1-desc);total+=sub;var el=document.getElementById('gsub-'+g.id);if(el)el.textContent=g.precio>0?fmtL(sub):'—';if(g.precio>0)detalles.push(`${esc(g.nombre||(g.tipo||'Grupo'))}: ${u} × L${g.precio.toFixed(0)}${desc>0?' (-'+Math.round(desc*100)+'%)':''} = ${fmtL(sub)}`);});
   document.getElementById('est-result-box').style.display='block';
   set('est-total-lps',fmtL(total));set('est-total-usd',fmtU(total)+' USD');
   document.getElementById('est-detail').innerHTML=detalles.length?detalles.join('<br>'):'Ingresá precios y cantidades.';
@@ -1567,9 +1698,9 @@ function renderGrafCombined(){
   <div class="card"><div class="ctitle">👤 Personal — Balance neto mensual</div><div class="chart-wrap"><canvas id="gc-p-line"></canvas></div></div>`;
   if(bizs.length){
     bizs.forEach(b=>{
-      html+=`<div class="card"><div class="ctitle" style="color:var(--accent2)">${b.emoji||'🏪'} ${b.name} — Ventas vs Costos (6 meses)</div><div class="chart-wrap"><canvas id="gc-n-${b.id}-bar"></canvas></div></div>
-      <div class="card"><div class="ctitle" style="color:var(--accent2)">${b.emoji||'🏪'} ${b.name} — Ganancia neta mensual</div><div class="chart-wrap"><canvas id="gc-n-${b.id}-line"></canvas></div></div>
-      <div class="card"><div class="ctitle" style="color:var(--accent2)">${b.emoji||'🏪'} ${b.name} — Unidades compradas vs vendidas</div><div class="chart-wrap"><canvas id="gc-n-${b.id}-prendas"></canvas></div></div>`;
+      html+=`<div class="card"><div class="ctitle" style="color:var(--accent2)">${esc(b.emoji||'🏪')} ${esc(b.name)} — Ventas vs Costos (6 meses)</div><div class="chart-wrap"><canvas id="gc-n-${b.id}-bar"></canvas></div></div>
+      <div class="card"><div class="ctitle" style="color:var(--accent2)">${esc(b.emoji||'🏪')} ${esc(b.name)} — Ganancia neta mensual</div><div class="chart-wrap"><canvas id="gc-n-${b.id}-line"></canvas></div></div>
+      <div class="card"><div class="ctitle" style="color:var(--accent2)">${esc(b.emoji||'🏪')} ${esc(b.name)} — Unidades compradas vs vendidas</div><div class="chart-wrap"><canvas id="gc-n-${b.id}-prendas"></canvas></div></div>`;
     });
   }else{
     html+=`<div class="card"><div class="ctitle">🏪 Negocios</div><div class="empty">Aún no tenés negocios creados</div></div>`;
@@ -1622,9 +1753,22 @@ function renderHistCombined(){
   var html=`<div class="card"><div class="ctitle">🗂 Historial — ${MONTHS_ES[curMonth]} ${curYear}</div><div style="font-size:12px;color:var(--muted)">Usá las flechas de arriba para ver otro mes.</div></div>`;
   html+=histScopeCard('personal','👤 Finanzas Personales',getPData()[k]||[],true);
   getBusinesses().forEach(function(b){
-    html+=histScopeCard(b.id,(b.emoji||'🏪')+' '+b.name,getNData(b.id)[k]||[],false);
+    html+=histScopeCard(b.id,esc(b.emoji||'🏪')+' '+esc(b.name),getNData(b.id)[k]||[],false);
   });
+  if(!allMovsLoaded){
+    html+=`<div style="text-align:center;margin:.5rem 0 1rem">
+      <button class="btn-sm" id="hist-load-older-btn" onclick="onLoadOlderMovs()">Cargar 12 meses más antiguos</button>
+      <div style="font-size:11px;color:var(--muted);margin-top:.3rem">Solo se carga el historial reciente automáticamente para que la app abra más rápido.</div>
+    </div>`;
+  }
   var el=document.getElementById('histview-content');if(el)el.innerHTML=html;
+}
+async function onLoadOlderMovs(){
+  var btn=document.getElementById('hist-load-older-btn');
+  if(btn){btn.disabled=true;btn.textContent='Cargando…';}
+  var n=await loadOlderMovements(12);
+  if(!n)alert('No hay historial más antiguo.');
+  renderHistCombined();
 }
 function histScopeCard(scopeId,title,movsIn,isP){
   var movs=movsIn.slice().sort((a,b)=>b.id-a.id);
@@ -1674,7 +1818,7 @@ async function saveProfile(){
 async function changePw(){
   var act=document.getElementById('pw-actual').value,nva=document.getElementById('pw-nueva').value,conf=document.getElementById('pw-conf').value;
   var el=document.getElementById('pw-msg');el.style.color='var(--muted)';el.textContent='Verificando...';
-  if(nva.length<6){el.style.color='var(--red)';el.textContent='Mínimo 6 caracteres.';return;}
+  if(nva.length<10){el.style.color='var(--red)';el.textContent='Mínimo 10 caracteres.';return;}
   if(nva!==conf){el.style.color='var(--red)';el.textContent='Las contraseñas no coinciden.';return;}
   var {error:verifyErr}=await sb.auth.signInWithPassword({email:CU_EMAIL,password:act});
   if(verifyErr){el.style.color='var(--red)';el.textContent='Contraseña actual incorrecta.';return;}
@@ -1694,12 +1838,30 @@ function getCtx(app){
   if(app==='p'){var pp=pParts(movs);var tc=getFijosFull().filter(d=>!d.esFijo).reduce((a,d)=>a+d.cuota,0);var allP=getPData(),totalAho=0;Object.values(allP).forEach(mv=>mv.forEach(m=>{if(m.tipo==='ahorro')totalAho+=m.montoHNL;}));return`FINANZAS PERSONALES (${MONTHS_ES[curMonth]} ${curYear}) Honduras:\n- Ingresos: L${ing.toFixed(2)} ($${(ing/RATE).toFixed(2)})\n- Gastos: L${gas.toFixed(2)}\n- Ahorro del mes: L${pp.aho.toFixed(2)} (ya descontado del balance)\n- Balance mes: L${pp.bal.toFixed(2)} | Acumulado: L${(pp.bal+roll).toFixed(2)}\n- Total ahorrado histórico: L${totalAho.toFixed(2)}\n- Deudas/mes: L${tc.toFixed(2)}\n- Cambio: 1 USD = L${RATE.toFixed(2)}\n- Categorías: ${JSON.stringify(cats)}`;}
   else{var biz=getBizById(currentBizId),st=getStockTipo(),tc2=Object.values(st).reduce((a,v)=>a+v.comp,0),tv=Object.values(st).reduce((a,v)=>a+v.vend,0);return`NEGOCIO: ${biz?.name||'?'} (${biz?.rubro||''}) (${MONTHS_ES[curMonth]} ${curYear}) Honduras:\n- Ventas: L${ing.toFixed(2)} ($${(ing/RATE).toFixed(2)})\n- Costos: L${gas.toFixed(2)}\n- Ganancia mes: L${(ing-gas).toFixed(2)} | Acumulado: L${(ing-gas+roll).toFixed(2)}\n- Margen: ${ing>0?Math.round(((ing-gas)/ing)*100):0}%\n- Stock disponible: ${Math.max(0,tc2-tv)}\n- Cambio: 1 USD = L${RATE.toFixed(2)}\n- Categorías: ${JSON.stringify(cats)}`;}
 }
+// La API key de Anthropic NUNCA vive en este archivo. El navegador llama
+// a nuestro propio endpoint /api/ask-ia (ver api/ask-ia.js), que valida
+// la sesión de Supabase del usuario y recién ahí llama a Anthropic desde
+// el servidor, con la key guardada como variable de entorno.
 async function askIA(app,pregunta){
   var re=document.getElementById(app+'-ai-resp'),lo=document.getElementById(app+'-ai-load');
   re.style.display='none';lo.style.display='block';
-  var sys=app==='p'?'Sos un asesor financiero personal para Honduras. Hablás en español centroamericano. Respondés de forma directa y amigable.':'Sos un asesor de negocios retail para Honduras. Hablás en español centroamericano. Dás estrategias concretas sobre ventas e inventario.';
-  try{var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,system:sys,messages:[{role:'user',content:getCtx(app)+'\n\nPregunta: '+pregunta}]})});var d=await r.json();lo.style.display='none';re.style.display='block';re.innerHTML=(d.content?.[0]?.text||'Sin respuesta.').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');}
-  catch(e){lo.style.display='none';re.style.display='block';re.textContent='Error al conectar.';}
+  try{
+    var {data:{session}}=await sb.auth.getSession();
+    if(!session){lo.style.display='none';re.style.display='block';re.textContent='Tu sesión expiró, volvé a iniciar sesión.';return;}
+    var r=await fetch('/api/ask-ia',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
+      body:JSON.stringify({app:app,context:getCtx(app),pregunta:pregunta})
+    });
+    var d=await r.json();
+    lo.style.display='none';re.style.display='block';
+    if(!r.ok){re.textContent=d.error||'Error al consultar el asesor de IA.';return;}
+    // Escapamos SIEMPRE el texto que llega antes de insertarlo como HTML:
+    // aunque venga del modelo, tratamos cualquier contenido externo como
+    // no confiable antes de aplicarle el formato de negritas/saltos.
+    var safe=esc(d.text||'Sin respuesta.');
+    re.innerHTML=safe.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+  }catch(e){lo.style.display='none';re.style.display='block';re.textContent='Error al conectar.';}
 }
 function freeAsk(app){var q=document.getElementById(app+'-ai-q').value.trim();if(!q)return;document.getElementById(app+'-ai-q').value='';askIA(app,q);}
 document.getElementById('p-ai-q').addEventListener('keydown',e=>{if(e.key==='Enter')freeAsk('p');});
