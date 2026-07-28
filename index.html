@@ -60,6 +60,9 @@ select option{background:var(--surface2)}
 /* ── SIDEBAR ── */
 .sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:400;opacity:0;pointer-events:none;transition:.25s}
 .sidebar-overlay.open{opacity:1;pointer-events:all}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:600;display:none;align-items:center;justify-content:center;padding:1.5rem}
+.modal-overlay.open{display:flex}
+.modal-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:1.5rem;width:100%;max-width:380px;max-height:90vh;overflow-y:auto}
 .sidebar{position:fixed;right:-300px;top:0;bottom:0;width:280px;background:var(--surface);border-left:1px solid var(--border);z-index:500;transition:.3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow-y:auto}
 .sidebar.open{right:0}
 .sb-header{padding:1.25rem;border-bottom:1px solid var(--border)}
@@ -565,6 +568,21 @@ select option{background:var(--surface2)}
 
 <!-- SIDEBAR -->
 <div class="sidebar-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
+<div class="modal-overlay" id="editmov-overlay" onclick="if(event.target===this)closeEditMov()">
+  <div class="modal-card">
+    <div class="ctitle">Editar movimiento</div>
+    <div class="fg"><label>Descripción</label><input type="text" id="em-desc"></div>
+    <div class="fg"><label>Categoría</label><select id="em-cat"></select></div>
+    <div class="frow">
+      <div class="fg"><label>Monto</label><input type="number" id="em-monto" min="0" step="0.01"></div>
+      <div class="fg"><label>Moneda</label><div class="cur-tog"><div class="cb" id="em-hnl" onclick="setEMCur('HNL')">L HNL</div><div class="cb" id="em-usd" onclick="setEMCur('USD')">$ USD</div></div></div>
+    </div>
+    <div style="display:flex;gap:.5rem;margin-top:.5rem">
+      <button class="btn-ghost" style="flex:1" onclick="closeEditMov()">Cancelar</button>
+      <button class="btn-p" style="flex:1" onclick="saveEditMov()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
 <div class="sidebar" id="sidebar">
   <div class="sb-header">
     <div class="sb-avatar" id="sb-avatar">?</div>
@@ -837,8 +855,9 @@ async function afterLogin(user){
   CU=user.id;CU_EMAIL=user.email;
   showScreen('loading');
   try{await loadAllData();}
-  catch(e){console.error(e);alert('No se pudieron cargar tus datos. Verificá tu conexión e intentá de nuevo.');}
-  showScreen('home');initApp();
+  catch(e){console.error('Error cargando datos:',e);}
+  try{showScreen('home');initApp();}
+  catch(e){console.error('Error iniciando la app:',e);showScreen('home');}
 }
 async function doLogout(){
   try{await sb.auth.signOut();}catch(e){}
@@ -1032,17 +1051,21 @@ function updateRolloverDisplay(){
 // ══════════════════════════════════
 // RATE
 // ══════════════════════════════════
+// El tipo de cambio "libre"/interbancario (frankfurter, open.er-api) suele quedar
+// un poco por debajo del precio de VENTA que cobra la banca comercial en Honduras.
+// Aplicamos un pequeño margen para acercarnos al valor de venta real.
+var VENTA_SPREAD=1.005;
 async function fetchRate(){
   try{
     var r=await fetch('https://api.frankfurter.app/latest?from=USD&to=HNL');
     var d=await r.json();
-    if(d?.rates?.HNL){RATE=d.rates.HNL;var ts=new Date().toLocaleDateString('es-HN');ss('hn_rate',{rate:RATE,date:ts});setRateDisplay();}
+    if(d?.rates?.HNL){RATE=d.rates.HNL*VENTA_SPREAD;var ts=new Date().toLocaleDateString('es-HN');ss('hn_rate',{rate:RATE,date:ts});setRateDisplay();}
   }catch(e){
-    try{var r2=await fetch('https://open.er-api.com/v6/latest/USD');var d2=await r2.json();if(d2?.rates?.HNL){RATE=d2.rates.HNL;ss('hn_rate',{rate:RATE,date:new Date().toLocaleDateString('es-HN')});setRateDisplay();}}
+    try{var r2=await fetch('https://open.er-api.com/v6/latest/USD');var d2=await r2.json();if(d2?.rates?.HNL){RATE=d2.rates.HNL*VENTA_SPREAD;ss('hn_rate',{rate:RATE,date:new Date().toLocaleDateString('es-HN')});setRateDisplay();}}
     catch(e2){var c=ls('hn_rate',null);if(c)RATE=c.rate;setRateDisplay();}
   }
 }
-function setRateDisplay(){var t='1 USD = L '+RATE.toFixed(2);['rate-display','rate-home'].forEach(id=>{var e=document.getElementById(id);if(e)e.textContent=t;});}
+function setRateDisplay(){var t='1 USD ≈ L '+RATE.toFixed(2)+' (venta)';['rate-display','rate-home'].forEach(id=>{var e=document.getElementById(id);if(e)e.textContent=t;});}
 function initRate(){var c=ls('hn_rate',null),ts=new Date().toLocaleDateString('es-HN');if(!c||c.date!==ts)fetchRate();else{RATE=c.rate;setRateDisplay();}}
 
 // ══════════════════════════════════
@@ -1294,7 +1317,7 @@ function eliminar(app,id){
 // ══════════════════════════════════
 var ICONS={ingreso:'💰',gasto:'💸',ahorro:'🏦',venta:'💰',costo:'💸'};
 function set(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
-function refreshAll(){updateHeroP();refreshHeroN();renderRec('p');renderRec('n');updateRolloverDisplay();}
+function refreshAll(){updateHeroP();refreshHeroN();renderRec('p');renderRec('n');updateRolloverDisplay();renderTodos('p');if(currentBizId)renderTodos('n');}
 function updateHeroP(){
   var movs=getMovsApp('p');
   var p=pParts(movs),ing=p.ing,gas=p.gas,aho=p.aho;
@@ -1334,7 +1357,7 @@ function refreshHeroN(){
 }
 function txHTML(m,app,del){
   var neg=m.tipo==='gasto'||m.tipo==='costo';
-  return`<div class="txi"><div class="txic ${m.tipo}">${ICONS[m.tipo]||'📌'}</div><div class="txin"><div class="txd">${m.desc}</div><div class="txcat">${m.cat}${m.prendas?' · '+m.prendas+' '+m.prendaTipo:''} · ${m.fecha}</div></div><div style="text-align:right"><div class="txa ${m.tipo}">${neg?'-':'+'}${fmtL(m.montoHNL)}</div><div class="txdt">${neg?'-':'+'}${fmtU(m.montoHNL)}</div>${m.cur==='USD'?'<div class="txdt">orig. $'+m.monto.toFixed(2)+'</div>':''}${del?'<button class="btn-ghost" onclick="eliminar(\''+app+'\','+m.id+')">✕</button>':''}</div></div>`;
+  return`<div class="txi"><div class="txic ${m.tipo}">${ICONS[m.tipo]||'📌'}</div><div class="txin"><div class="txd">${m.desc}</div><div class="txcat">${m.cat}${m.prendas?' · '+m.prendas+' '+m.prendaTipo:''} · ${m.fecha}</div></div><div style="text-align:right"><div class="txa ${m.tipo}">${neg?'-':'+'}${fmtL(m.montoHNL)}</div><div class="txdt">${neg?'-':'+'}${fmtU(m.montoHNL)}</div>${m.cur==='USD'?'<div class="txdt">orig. $'+m.monto.toFixed(2)+'</div>':''}${del?'<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px"><button class="btn-ghost" onclick="openEditMov(\''+app+'\','+m.id+')" aria-label="Editar movimiento">✏️</button><button class="btn-ghost" onclick="eliminar(\''+app+'\','+m.id+')" aria-label="Eliminar movimiento">✕</button></div>':''}</div></div>`;
 }
 function renderRec(app){var movs=getMovsApp(app).slice(0,6),el=document.getElementById(app+'-lista-rec');el.innerHTML=movs.length?movs.map(m=>txHTML(m,app,false)).join(''):'<div class="empty">Sin movimientos este mes 🌱</div>';}
 function renderTodos(app){
@@ -1343,6 +1366,45 @@ function renderTodos(app){
   if(app==='p'){var fc=document.getElementById('p-fc');if(fc&&fc.value)lista=lista.filter(m=>m.cat===fc.value);}
   var cnt=document.getElementById(app+'-tx-count');if(cnt)cnt.textContent=lista.length+' registros';
   var el=document.getElementById(app+'-lista-all');el.innerHTML=lista.length?lista.map(m=>txHTML(m,app,true)).join(''):'<div class="empty">Sin resultados</div>';
+}
+
+// ══════════════════════════════════
+// EDITAR MOVIMIENTO
+// ══════════════════════════════════
+var emCtx=null,emCur='HNL';
+function setEMCur(c){
+  emCur=c;
+  var h=document.getElementById('em-hnl'),u=document.getElementById('em-usd');
+  if(h)h.className='cb'+(c==='HNL'?' ac':'');
+  if(u)u.className='cb'+(c==='USD'?' ac':'');
+}
+function openEditMov(app,id){
+  var movs=getMovsApp(app),m=movs.find(function(x){return x.id===id;});
+  if(!m){alert('No se encontró el movimiento (¿cambiaste de mes?).');return;}
+  emCtx={app:app,id:id,biz:app==='n'?currentBizId:null,tipo:m.tipo};
+  document.getElementById('em-desc').value=m.desc;
+  document.getElementById('em-cat').innerHTML=getAllCats(app,m.tipo).map(function(c){return`<option${c===m.cat?' selected':''}>${c}</option>`;}).join('');
+  document.getElementById('em-monto').value=m.monto;
+  setEMCur(m.cur||'HNL');
+  document.getElementById('editmov-overlay').classList.add('open');
+}
+function closeEditMov(){document.getElementById('editmov-overlay').classList.remove('open');emCtx=null;}
+function saveEditMov(){
+  if(!emCtx)return;
+  var desc=document.getElementById('em-desc').value.trim();
+  var cat=document.getElementById('em-cat').value;
+  var monto=parseFloat(document.getElementById('em-monto').value)||0;
+  if(!desc||monto<=0){alert('Completá una descripción y un monto válido.');return;}
+  var store=emCtx.app==='p'?getPData():getNData(emCtx.biz);
+  var k=curKey(),arr=store[k]||[],m=arr.find(function(x){return x.id===emCtx.id;});
+  if(!m){alert('No se encontró el movimiento.');closeEditMov();return;}
+  m.desc=desc;m.cat=cat;m.monto=monto;m.cur=emCur;m.montoHNL=toHNL(monto,emCur);
+  if(emCtx.app==='p'){MEM[uk('pData')]=store;}else{MEM[uk('nData_'+emCtx.biz)]=store;}
+  sb.from('movements').update({descripcion:desc,cat:cat,monto:monto,cur:emCur,monto_hnl:m.montoHNL}).eq('id',emCtx.id).eq('user_id',CU).then(function(r){if(r.error)console.error('editar mov',r.error);});
+  var app=emCtx.app;
+  closeEditMov();
+  refreshAll();
+  if(app==='n')refreshHeroN();
 }
 
 // ══════════════════════════════════
@@ -1366,7 +1428,7 @@ function renderAhorros(){
 function getFijosFull(){
   return getDeudas().map(function(d){
     if(typeof d.nota==='string'&&d.nota.indexOf('§DATA§')===0){
-      try{var meta=JSON.parse(d.nota.slice(7));return Object.assign({},d,{esFijo:true,tipo:meta.tipo||'gasto',cat:meta.cat||'Otro',notaTxt:meta.note||'',cur:meta.cur||'HNL'});}catch(e){}
+      try{var meta=JSON.parse(d.nota.slice(6));return Object.assign({},d,{esFijo:true,tipo:meta.tipo||'gasto',cat:meta.cat||'Otro',notaTxt:meta.note||'',cur:meta.cur||'HNL'});}catch(e){}
     }
     return Object.assign({},d,{esFijo:false,tipo:'gasto',cat:'Deuda',notaTxt:d.nota||'',cur:'HNL'});
   });
