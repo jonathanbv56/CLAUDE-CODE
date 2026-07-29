@@ -6,7 +6,6 @@
 <title>MisDatosHN</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="config.js"></script>
 <style>
 :root{--bg:#0f0f11;--surface:#19191e;--surface2:#222228;--border:rgba(255,255,255,0.07);--accent:#c8f261;--accent2:#7b61ff;--red:#ff5c5c;--green:#c8f261;--amber:#ffc45c;--text:#f0f0f0;--muted:#888;--r:14px}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -639,14 +638,13 @@ function curKey(){return mkey(curYear,curMonth);}
 // ══════════════════════════════════
 // SUPABASE CLIENT
 // ══════════════════════════════════
-// Las credenciales YA NO están escritas aquí — se cargan desde config.js
-// (que no se sube a git). Si falta, avisamos claro en vez de fallar en silencio.
-if(!window.APP_CONFIG||!window.APP_CONFIG.SUPABASE_URL||!window.APP_CONFIG.SUPABASE_KEY){
-  document.write('<div style="padding:2rem;font-family:sans-serif;color:#fff;background:#0f0f11">⚠️ Falta config.js con SUPABASE_URL y SUPABASE_KEY. Copiá config.example.js a config.js y completá tus datos.</div>');
-  throw new Error('Falta config.js');
-}
-var SUPABASE_URL=window.APP_CONFIG.SUPABASE_URL;
-var SUPABASE_KEY=window.APP_CONFIG.SUPABASE_KEY;
+// Estos dos valores NO se escriben a mano acá: el paso de build
+// (scripts/build.js) los reemplaza por las Environment Variables
+// configuradas en Vercel (SUPABASE_URL y SUPABASE_KEY) antes de
+// desplegar. En el repo solo quedan los tokens de abajo — nunca un
+// valor real. Ver README.md para correrlo en local.
+var SUPABASE_URL=__SUPABASE_URL__;
+var SUPABASE_KEY=__SUPABASE_KEY__;
 var sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 var CU_EMAIL=null,profileName='';
 

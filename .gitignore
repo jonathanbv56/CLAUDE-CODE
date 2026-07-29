@@ -1,0 +1,8 @@
+# Credenciales locales — nunca subir esto a un repositorio público
+.env
+
+# Carpeta generada por el build (Vercel la genera sola en cada deploy)
+dist/
+
+# Por si en algún momento se agregan dependencias
+node_modules/

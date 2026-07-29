@@ -1,7 +1,0 @@
-ok mira que al iniciar sesion sea aparte que no este ela bajar el app pls si no que pueda acceder a la app despues de iniciar sesion como un app normal, que abajo haya un menu de navegacion en el app que saga como home , personal negocio  graphs y asi e historial en donde salga el historial del negocio y personal tambien que se pueda elegir 
-
-https://fcpunepukrwpbjbmfuzv.supabase.co/rest/v1/
-
-key 
-
-sb_publishable_GvK287oBw7cqw3GT3H4K8g_w5eHkG0q

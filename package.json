@@ -1,0 +1,9 @@
+{
+  "name": "misdatoshn",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MisDatosHN — control de finanzas personales y de negocio",
+  "scripts": {
+    "build": "node scripts/build.js"
+  }
+}
